@@ -3,12 +3,16 @@
 // Imports
 require('dotenv').config()
 const express = require('express')
+const connectDB = require('./config/db.js')                       
 
 // Routers
 const { fplRouter } = require("./routes/fplRoutes")     
 
 // Variables
 const port = process.env.PORT || 5050
+
+// Connect to database
+connectDB()
 
 // App
 const app = express()

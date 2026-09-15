@@ -1,6 +1,6 @@
 // fixtureModel.js
 
-const mongoose = require("mongoose");
+const mongoose = require("mongoose")
 
 const fixtureStatSchema = mongoose.Schema(
     {
@@ -34,7 +34,7 @@ const fixtureStatSchema = mongoose.Schema(
         ]
     },
     { _id: false }
-);
+)
 
 const fixtureSchema = mongoose.Schema(
     {
@@ -129,6 +129,6 @@ const fixtureSchema = mongoose.Schema(
     {
         timestamps: true
     }
-);
+)
 
-module.exports = mongoose.model("Fixture", fixtureSchema);
+module.exports = mongoose.model("Fixture", fixtureSchema)

@@ -33,9 +33,17 @@ const getManagerGameweek = async (managerId, gameweek) => {
     return response.data
 }
 
+// Get player gameweek data
+const getPlayerGameweek = async (playerId) => {
+    const response = await axios.get(`${FPL_API_URL}/element-summary/${playerId}`)
+
+    return response.data
+}
+
 module.exports = {
     getBootstrap,
     getFixtures,
     getManager,
-    getManagerGameweek
+    getManagerGameweek,
+    getPlayerGameweek
 }

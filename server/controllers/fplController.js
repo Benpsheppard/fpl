@@ -83,6 +83,21 @@ const getManagerSquad = asyncHandler(async (req, res) => {
     }
 })
 
+/**
+ * @route   GET /api/fpl/player-gameweek/:playerId
+ * @desc    Retrieves specified player's gameweek data and history
+ */
+const getPlayerGameweek = asyncHandler(async (req, res) => {
+    try {
+        const { playerId } = req.params
+        const data = await fplService.getPlayerGameweek(playerId)
+        res.status(200).json(data)
+    } catch (error) {
+        console.error("Error fetching player gameweek data: ", error.message)
+        res.status(500).json({ message: "Failed to fetch player gameweek data" })
+    }
+})
+
 //--------------------------------------------------------//
 //                      SYNC Routes                       //
 //--------------------------------------------------------//
@@ -157,15 +172,34 @@ const syncManagerGameweek = asyncHandler(async (req, res) => {
     }
 })
 
+/**
+ * @route   POST /api/fpl/sync-player-gameweek/:playerId
+ * @desc    Sync specified player's gameweek data to database
+ */
+const syncPlayerGameweek = asyncHandler(
+    async (req, res) => {
+        try {
+            const { playerId } = req.params
+            const result = await fplSyncService.syncPlayerGameweek(playerId)
+            res.status(200).json(result)
+        } catch (error) {
+            console.error("Error syncing player gameweek data: ", error.message)
+            res.status(500).json({ message: "Failed to sync player gameweek data" })
+        }
+    }
+)
+
 module.exports = {
     getBootstrap,
     getFixtures,
     getManager,
     getManagerGameweek,
     getManagerSquad,
+    getPlayerGameweek,
     
     syncBootstrap,
     syncFixtures,
     syncManager,
-    syncManagerGameweek
+    syncManagerGameweek,
+    syncPlayerGameweek
 }

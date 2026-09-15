@@ -1,6 +1,7 @@
 // fplSyncService.js
 
 const Player = require("../models/playerModel")
+const PlayerGameweek = require("../models/playerGameweekModel")
 const Team = require("../models/teamModel")
 const Fixture = require("../models/fixtureModel")
 const Manager = require("../models/managerModel")
@@ -502,9 +503,167 @@ const syncManagerGameweek = async (managerId, gameweek) => {
     }
 }
 
+// Sync Player Gameweek data to Database
+const syncPlayerGameweek = async (playerId) => {
+    const data = await fplService.getPlayerGameweek(playerId)
+    if (!data) {
+        throw new Error("Invalid player summary data received from FPL")
+    }
+
+    if (!data.history || !Array.isArray(data.history)) {
+        throw new Error("Invalid player history data received from FPL")
+    }
+
+    const playerGameweekOperations = data.history.map((history) => ({
+        updateOne: {
+            filter: {
+                playerId: history.element,
+                gameweek: history.round
+            },
+
+            update: {
+                $set: {
+                    playerId: history.element,
+
+                    gameweek: history.round,
+
+                    fixtureId: history.fixture,
+
+                    opponentTeam:
+                        history.opponent_team,
+
+                    wasHome: history.was_home,
+
+                    kickoffTime:
+                        history.kickoff_time,
+
+                    homeTeamScore:
+                        history.team_h_score,
+
+                    awayTeamScore:
+                        history.team_a_score,
+
+                    totalPoints:
+                        history.total_points,
+
+                    minutes:
+                        history.minutes,
+
+                    goalsScored:
+                        history.goals_scored,
+
+                    assists:
+                        history.assists,
+
+                    cleanSheets:
+                        history.clean_sheets,
+
+                    goalsConceded:
+                        history.goals_conceded,
+
+                    ownGoals:
+                        history.own_goals,
+
+                    penaltiesSaved:
+                        history.penalties_saved,
+
+                    penaltiesMissed:
+                        history.penalties_missed,
+
+                    yellowCards:
+                        history.yellow_cards,
+
+                    redCards:
+                        history.red_cards,
+
+                    saves:
+                        history.saves,
+
+                    bonus:
+                        history.bonus,
+
+                    bps:
+                        history.bps,
+
+                    influence:
+                        Number(history.influence),
+
+                    creativity:
+                        Number(history.creativity),
+
+                    threat:
+                        Number(history.threat),
+
+                    ictIndex:
+                        Number(history.ict_index),
+
+                    clearancesBlocksInterceptions:
+                        history.clearances_blocks_interceptions,
+
+                    recoveries:
+                        history.recoveries,
+
+                    tackles:
+                        history.tackles,
+
+                    defensiveContribution:
+                        history.defensive_contribution,
+
+                    starts:
+                        history.starts,
+
+                    expectedGoals:
+                        Number(history.expected_goals),
+
+                    expectedAssists:
+                        Number(history.expected_assists),
+
+                    expectedGoalInvolvements:
+                        Number(
+                            history.expected_goal_involvements
+                        ),
+
+                    expectedGoalsConceded:
+                        Number(
+                            history.expected_goals_conceded
+                        ),
+
+                    value:
+                        history.value,
+
+                    transfersBalance:
+                        history.transfers_balance,
+
+                    selected:
+                        history.selected,
+
+                    transfersIn:
+                        history.transfers_in,
+
+                    transfersOut:
+                        history.transfers_out
+                }
+            },
+
+            upsert: true
+        }
+    }))
+
+    const playerGameweekResult = await PlayerGameweek.bulkWrite(playerGameweekOperations)
+
+    return {
+        playerGameweeks: {
+            matched: playerGameweekResult.matchedCount,
+            modified: playerGameweekResult.modifiedCount,
+            upserted: playerGameweekResult.upsertedCount
+        }
+    }
+}
+
 module.exports = {
     syncBootstrap,
     syncFixtures,
     syncManager,
-    syncManagerGameweek
+    syncManagerGameweek,
+    syncPlayerGameweek
 }

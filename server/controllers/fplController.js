@@ -4,6 +4,7 @@
 const asyncHandler = require("express-async-handler")
 const fplService = require("../services/fplService")
 const fplSyncService = require("../services/fplSyncService")
+const managerService = require("../services/managerService")
 
 //--------------------------------------------------------//
 //                      GET Routes                        //
@@ -64,6 +65,21 @@ const getManagerGameweek = asyncHandler(async (req, res) => {
     } catch (error) {
         console.error("Error fetching manager gameweek data: ", error.message)
         res.status(500).json({ message: "Failed to fetch manager gameweek data" })
+    }
+})
+
+/**
+ * @route   GET /api/fpl/manager/:managerId/squad/:gameweek
+ * @desc    Retrieve specified manager's squad for specified gameweek
+ */
+const getManagerSquad = asyncHandler(async (req, res) => {
+    try {
+        const { managerId, gameweek } = req.params
+        const data = await managerService.getManagerSquad(managerId, gameweek)
+        res.status(200).json(data)
+    } catch (error) {
+        console.error("Error fetching manager squad data: ", error.message)
+        res.status(500).json({ message: "Failed to fetch manager squad data" })
     }
 })
 
@@ -146,6 +162,8 @@ module.exports = {
     getFixtures,
     getManager,
     getManagerGameweek,
+    getManagerSquad,
+    
     syncBootstrap,
     syncFixtures,
     syncManager,

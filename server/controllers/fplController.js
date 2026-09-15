@@ -34,24 +34,42 @@ const getFixtures = asyncHandler(async (req, res) => {
 })
 
 /**
- * @route   POST /api/fpl/sync
+ * @route   POST /api/fpl/sync-bootstrap
  * @desc    Sync player and team data to database
  */
-const dataSync = asyncHandler(async (req, res) => {
+const syncBootstrap = asyncHandler(async (req, res) => {
     try {
-        const result = await fplSyncService.dataSync()
+        const result = await fplSyncService.syncBootstrap()
         res.status(200).json({
-            message: "FPL data synced successfully",
+            message: "FPL bootstrap data synced successfully",
             result
         })
     } catch (error) {
-        console.error("Error syncing FPL data: ", error.message)
-        res.status(500).json({ message: "Failed to sync FPL data" })
+        console.error("Error syncing FPL bootstrap data: ", error.message)
+        res.status(500).json({ message: "Failed to sync FPL bootstrap data" })
+    }
+}) 
+
+/**
+ * @route   POST /api/fpl/sync-fixtures
+ * @desc    Sync fixtures data to database
+ */
+const syncFixtures = asyncHandler(async (req, res) => {
+    try {
+        const result = await fplSyncService.syncFixtures()
+        res.status(200).json({
+            message: "FPL fixture data synced successfully",
+            result
+        })
+    } catch (error) {
+        console.error("Error syncing FPL fixture data: ", error.message)
+        res.status(500).json({ message: "Failed to sync FPL fixture data" })
     }
 }) 
 
 module.exports = {
     getBootstrap,
     getFixtures,
-    dataSync
+    syncBootstrap,
+    syncFixtures
 }

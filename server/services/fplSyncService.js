@@ -2,14 +2,15 @@
 
 const Player = require("../models/playerModel")
 const Team = require("../models/teamModel")
+const Fixture = require("../models/fixtureModel")
 const fplService = require("./fplService")
 
-const dataSync = async () => {
+const syncBootstrap = async () => {
     const bootstrap = await fplService.getBootstrap()
 
     const teams = bootstrap.teams
     const players = bootstrap.elements
-
+    
     if (!teams || !players) {
         throw new Error("Invalid bootstrap data received from FPL")
     }
@@ -266,6 +267,74 @@ const dataSync = async () => {
     }
 }
 
+const syncFixtures = async () => {
+    const fixtures = await fplService.getFixtures()
+
+    if (!fixtures || !Array.isArray(fixtures)) {
+        throw new Error("Invalid fixture data received from FPL")
+    }
+
+    const fixtureOperations = fixtures.map((fixture) => ({
+        updateOne: {
+            filter: {
+                fplId: fixture.id
+            },
+
+            update: {
+                $set: {
+                    fplId: fixture.id,
+
+                    code: fixture.code,
+                    pulseId: fixture.pulse_id,
+
+                    gameweek: fixture.event,
+
+                    homeTeam: fixture.team_h,
+                    awayTeam: fixture.team_a,
+
+                    homeScore: fixture.team_h_score,
+                    awayScore: fixture.team_a_score,
+
+                    homeTeamDifficulty:
+                        fixture.team_h_difficulty,
+
+                    awayTeamDifficulty:
+                        fixture.team_a_difficulty,
+
+                    finished: fixture.finished,
+                    finishedProvisional:
+                        fixture.finished_provisional,
+
+                    started: fixture.started,
+                    minutes: fixture.minutes,
+
+                    kickoffTime: fixture.kickoff_time,
+
+                    provisionalStartTime:
+                        fixture.provisional_start_time,
+
+                    stats: fixture.stats,
+
+                    updatedAt: new Date()
+                }
+            },
+
+            upsert: true
+        }
+    }))
+
+    const fixtureResult = await Fixture.bulkWrite(fixtureOperations)
+
+    return {
+        fixtures: {
+            matched: fixtureResult.matchedCount,
+            modified: fixtureResult.modifiedCount,
+            upserted: fixtureResult.upsertedCount
+        }
+    }
+}
+
 module.exports = {
-    dataSync
+    syncBootstrap,
+    syncFixtures
 }

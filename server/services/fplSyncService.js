@@ -3,8 +3,10 @@
 const Player = require("../models/playerModel")
 const Team = require("../models/teamModel")
 const Fixture = require("../models/fixtureModel")
+const Manager = require("../models/managerModel")
 const fplService = require("./fplService")
 
+// Sync Bootstrap data to Database
 const syncBootstrap = async () => {
     const bootstrap = await fplService.getBootstrap()
 
@@ -267,6 +269,7 @@ const syncBootstrap = async () => {
     }
 }
 
+// Sync Fixture data to Database
 const syncFixtures = async () => {
     const fixtures = await fplService.getFixtures()
 
@@ -334,7 +337,97 @@ const syncFixtures = async () => {
     }
 }
 
+// Sync Manager data to Database
+const syncManager = async (managerId) => {
+    const manager = await fplService.getManager(managerId)
+
+    if (!manager) {
+        throw new Error("Invalid manager data received from FPL")
+    }
+
+    const managerOperation = {
+        updateOne: {
+            filter: {
+                fplId: manager.id
+            },
+
+            update: {
+                $set: {
+                    fplId: manager.id,
+
+                    playerFirstName: manager.player_first_name,
+                    playerLastName: manager.player_last_name,
+
+                    name: manager.name,
+
+                    playerRegionId: manager.player_region_id,
+                    playerRegionName: manager.player_region_name,
+                    playerRegionIsoCodeShort:
+                        manager.player_region_iso_code_short,
+                    playerRegionIsoCodeLong:
+                        manager.player_region_iso_code_long,
+
+                    favouriteTeam: manager.favourite_team,
+
+                    joinedTime: manager.joined_time,
+                    startedEvent: manager.started_event,
+                    yearsActive: manager.years_active,
+
+                    currentEvent: manager.current_event,
+
+                    summaryOverallPoints:
+                        manager.summary_overall_points,
+
+                    summaryOverallRank:
+                        manager.summary_overall_rank,
+
+                    summaryEventPoints:
+                        manager.summary_event_points,
+
+                    summaryEventRank:
+                        manager.summary_event_rank,
+
+                    lastDeadlineBank:
+                        manager.last_deadline_bank,
+
+                    lastDeadlineValue:
+                        manager.last_deadline_value,
+
+                    lastDeadlineTotalTransfers:
+                        manager.last_deadline_total_transfers,
+
+                    enteredEvents:
+                        manager.entered_events,
+
+                    nameChangeBlocked:
+                        manager.name_change_blocked,
+
+                    kit: manager.kit,
+
+                    clubBadgeSrc:
+                        manager.club_badge_src,
+
+                    updatedAt: new Date()
+                }
+            },
+
+            upsert: true
+        }
+    }
+
+    const managerResult = await Manager.bulkWrite([managerOperation])
+
+    return {
+        manager: {
+            matched: managerResult.matchedCount,
+            modified: managerResult.modifiedCount,
+            upserted: managerResult.upsertedCount
+        }
+    }
+}
+
 module.exports = {
     syncBootstrap,
-    syncFixtures
+    syncFixtures,
+    syncManager
 }

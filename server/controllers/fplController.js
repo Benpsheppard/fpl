@@ -34,6 +34,21 @@ const getFixtures = asyncHandler(async (req, res) => {
 })
 
 /**
+ * @route    GET /api/fpl/manager/:managerId
+ * @desc      Retrieve specified manager's data using managerId
+ */
+const getManager = asyncHandler(async (req, res) => {
+    try {
+        const { managerId } = req.params
+        const data = await fplService.getManager(managerId)
+        res.status(200).json(data)
+    } catch (error) {
+        console.error("Error fetching manager: ", error.message)
+        res.status(500).json({ message: "Failed to fetch manager data" })
+    }
+})
+
+/**
  * @route   POST /api/fpl/sync-bootstrap
  * @desc    Sync player and team data to database
  */
@@ -67,9 +82,29 @@ const syncFixtures = asyncHandler(async (req, res) => {
     }
 }) 
 
+/**
+ * @route   POST /api/fpl/sync-manager/:managerId
+ * @desc    Sync manager data to database
+ */
+const syncManager = asyncHandler(async (req, res) => {
+    try {
+        const { managerId } = req.params
+        const result = await fplSyncService.syncManager(managerId)
+        res.status(200).json({
+            message: "FPL Manager data synced successfully",
+            result
+        })
+    } catch (error) {
+        console.error("Error syncing manager data: ", error.message)
+        res.status(500).json({ message: "Failed to sync manager data" })
+    }
+})
+
 module.exports = {
     getBootstrap,
     getFixtures,
+    getManager,
     syncBootstrap,
-    syncFixtures
+    syncFixtures,
+    syncManager
 }

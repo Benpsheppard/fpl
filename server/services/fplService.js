@@ -19,7 +19,15 @@ const getFixtures = async () => {
     return response.data
 }
 
+// Get manager data
+const getManager = async (managerId) => {
+    const response = await axios.get(`${FPL_API_URL}/entry/${managerId}`)
+
+    return response.data
+}
+
 module.exports = {
     getBootstrap,
-    getFixtures
+    getFixtures,
+    getManager
 }

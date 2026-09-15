@@ -142,9 +142,9 @@ const playerSchema = mongoose.Schema({
     directFreeKicksOrder: { type: Number },
     penaltiesOrder: { type: Number },
 
-    cornersAndIndirectFreeKicksText: String,
-    directFreeKicksText: String,
-    penaltiesText: String,
+    cornersAndIndirectFreeKicksText: { type: String },
+    directFreeKicksText: { type: String },
+    penaltiesText: { type: String },
 
     // FPL rankings
     influenceRank: { type: Number },
@@ -165,6 +165,19 @@ const playerSchema = mongoose.Schema({
     selectedRank: { type: Number },
     selectedRankType: { type: Number },
 
+    // Expected points
+    epNext: { type: Number },
+    epThis: { type: Number },
+
+    // Additional information
+    region: { type: Number },
+    squadNumber: { type: Number },
+    hasTemporaryCode: { type: Boolean },
+
+    // Price information
+    priceChangeLockedUntil: { type: Date },
+    priceChangeCalibrating: { type: Boolean },
+
     // Flags
     canTransact: { type: Boolean },
     canSelect: { type: Boolean },
@@ -174,7 +187,17 @@ const playerSchema = mongoose.Schema({
     dreamteamCount: { type: Number },
 
     // Scout information
-    scoutRisks: [{ type: String }],
+    scoutRisks: [
+        { 
+            property: { type: String },
+            notes: { type: String },
+            gameweek: { type: Number },
+            url: { 
+                type: String, 
+                default: null
+            }
+        }
+    ],
     scoutNewsLink: { type: String },
     
     // Metadata

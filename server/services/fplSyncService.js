@@ -4,6 +4,7 @@ const Player = require("../models/playerModel")
 const Team = require("../models/teamModel")
 const Fixture = require("../models/fixtureModel")
 const Manager = require("../models/managerModel")
+const ManagerGameweek = require("../models/managerGameweekModel")
 const fplService = require("./fplService")
 
 // Sync Bootstrap data to Database
@@ -415,7 +416,7 @@ const syncManager = async (managerId) => {
         }
     }
 
-    const managerResult = await Manager.bulkWrite([managerOperation])
+    const managerResult = await Manager.bulkWrite([ managerOperation ])
 
     return {
         manager: {
@@ -426,8 +427,84 @@ const syncManager = async (managerId) => {
     }
 }
 
+// Sync Manager Gameweek data to Database
+const syncManagerGameweek = async (managerId, gameweek) => {
+    const data = await fplService.getManagerGameweek(managerId, gameweek)
+
+    if (!data) {
+        throw new Error("Invalid manager gameweek data received from FPL")
+    }
+
+    const managerGameweekOperation = {
+        updateOne: {
+            filter: {
+                managerId: Number(managerId),
+                gameweek: Number(gameweek)
+            },
+
+            update: {
+                $set: {
+                    managerId: Number(managerId),
+                    gameweek: Number(gameweek),
+
+                    activeChip: data.active_chip,
+
+                    automaticSubs: data.automatic_subs,
+
+                    picks: data.picks,
+
+                    points: data.entry_history.points,
+
+                    totalPoints:
+                        data.entry_history.total_points,
+
+                    rank: data.entry_history.rank,
+
+                    rankSort:
+                        data.entry_history.rank_sort,
+
+                    overallRank:
+                        data.entry_history.overall_rank,
+
+                    percentileRank:
+                        data.entry_history.percentile_rank,
+
+                    overallRankPercentage:
+                        data.entry_history.overall_rank_percentage,
+
+                    bank: data.entry_history.bank,
+
+                    value: data.entry_history.value,
+
+                    eventTransfers:
+                        data.entry_history.event_transfers,
+
+                    eventTransfersCost:
+                        data.entry_history.event_transfers_cost,
+
+                    pointsOnBench:
+                        data.entry_history.points_on_bench
+                }
+            },
+
+            upsert: true
+        }
+    }
+    
+    const managerGameweekResult = await ManagerGameweek.bulkWrite([ managerGameweekOperation ])
+
+    return {
+        managerGameweek: {
+            matched: managerGameweekResult.matchedCount,
+            modified: managerGameweekResult.modifiedCount,
+            upserted: managerGameweekResult.upsertedCount
+        }
+    }
+}
+
 module.exports = {
     syncBootstrap,
     syncFixtures,
-    syncManager
+    syncManager,
+    syncManagerGameweek
 }

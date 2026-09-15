@@ -5,6 +5,10 @@ const asyncHandler = require("express-async-handler")
 const fplService = require("../services/fplService")
 const fplSyncService = require("../services/fplSyncService")
 
+//--------------------------------------------------------//
+//                      GET Routes                        //
+//--------------------------------------------------------//
+
 /**
  * @route   GET /api/fpl/bootstrap
  * @desc    Retrieve bootstrap data from fpl api
@@ -35,7 +39,7 @@ const getFixtures = asyncHandler(async (req, res) => {
 
 /**
  * @route    GET /api/fpl/manager/:managerId
- * @desc      Retrieve specified manager's data using managerId
+ * @desc     Retrieve specified manager's data using managerId
  */
 const getManager = asyncHandler(async (req, res) => {
     try {
@@ -47,6 +51,25 @@ const getManager = asyncHandler(async (req, res) => {
         res.status(500).json({ message: "Failed to fetch manager data" })
     }
 })
+
+/**
+ * @route   GET /api/fpl/manager-gameweek/:managerId
+ * @desc    Retrieve specified manager's gameweek data using managerId 
+ */
+const getManagerGameweek = asyncHandler(async (req, res) => {
+    try {
+        const { managerId, gameweek } = req.params
+        const data = await fplService.getManagerGameweek(managerId, gameweek)
+        res.status(200).json(data)
+    } catch (error) {
+        console.error("Error fetching manager gameweek data: ", error.message)
+        res.status(500).json({ message: "Failed to fetch manager gameweek data" })
+    }
+})
+
+//--------------------------------------------------------//
+//                      SYNC Routes                       //
+//--------------------------------------------------------//
 
 /**
  * @route   POST /api/fpl/sync-bootstrap
@@ -100,11 +123,31 @@ const syncManager = asyncHandler(async (req, res) => {
     }
 })
 
+/**
+ * @route   POST /api/fpl/sync-gameweek
+ * @desc    Sync manager gameweek data to database
+ */
+const syncManagerGameweek = asyncHandler(async (req, res) => {
+    try {
+        const { managerId, gameweek } = req.params
+        const result = await fplSyncService.syncManagerGameweek(managerId, gameweek)
+        res.status(200).json({
+            message: "FPL Manager Gameweek data synced successfully",
+            result
+        })
+    } catch (error) {
+        console.error("Error syncing manager gameweek data: ", error.message)
+        res.status(500).json({ message: "Failed to sync manager gameweek data" })
+    }
+})
+
 module.exports = {
     getBootstrap,
     getFixtures,
     getManager,
+    getManagerGameweek,
     syncBootstrap,
     syncFixtures,
-    syncManager
+    syncManager,
+    syncManagerGameweek
 }

@@ -11,7 +11,7 @@ const connectDB = async () => {
             console.log(`MongoDB Connected (development): ${conn.connection.host}`)
         } else {
             const conn = await mongoose.connect(process.env.MONGO_URI)
-            console.log(`MongoDB Connected: ${conn.connection.host}`)
+            console.log(`MongoDB Connected (production): ${conn.connection.host}`)
         }
     } catch (error) {
         console.log(error)

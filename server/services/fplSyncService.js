@@ -1,12 +1,18 @@
 // fplSyncService.js
 
+// Models
 const Player = require("../models/playerModel")
 const PlayerGameweek = require("../models/playerGameweekModel")
 const Team = require("../models/teamModel")
 const Fixture = require("../models/fixtureModel")
 const Manager = require("../models/managerModel")
 const ManagerGameweek = require("../models/managerGameweekModel")
+
+// Service
 const fplService = require("./fplService")
+
+// Imports
+const pLimit = require("p-limit")
 
 // Sync Bootstrap data to Database
 const syncBootstrap = async () => {
@@ -660,10 +666,42 @@ const syncPlayerGameweek = async (playerId) => {
     }
 }
 
+// Sync all Player's Gameweek data to Database
+const syncAllPlayersGameweek = async () => {
+    const players = await Player.find({ removed: false }).select("fplId").lean()
+
+    const limit = pLimit(10)
+
+    let successful = 0, failed = 0
+    const errors = []
+
+    await Promise.all(players.map((player) => limit(async () => {
+        try {
+            await syncPlayerGameweek(player.fplId)
+            successful++
+        } catch (error) {
+            failed++
+
+            errors.push({
+                playerId: player.fplId,
+                error: error.message
+            })
+        }
+    })))
+
+    return {
+        totalPlayers: players.length,
+        successful,
+        failed,
+        errors
+    }
+}
+
 module.exports = {
     syncBootstrap,
     syncFixtures,
     syncManager,
     syncManagerGameweek,
-    syncPlayerGameweek
+    syncPlayerGameweek,
+    syncAllPlayersGameweek
 }

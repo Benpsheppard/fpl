@@ -98,6 +98,21 @@ const getPlayerGameweek = asyncHandler(async (req, res) => {
     }
 })
 
+/**
+ * @route   GET /api/fpl/all-players-gameweek
+ * @desc    Retrieve gameweek data for multiple players
+ */
+const getAllPlayersGameweek = asyncHandler(async (req, res) => {
+    try {
+        const limit = req.body.limit || 10
+        const data = await fplService.getAllPlayersGameweek(limit)
+        res.status(200).json(data)
+    } catch (error) {
+        console.error("Error fetching all players gameweek data: ", error.message)
+        res.status(500).json({ message: "Failed to fetch all players gameweek data" })
+    }
+})
+
 //--------------------------------------------------------//
 //                      SYNC Routes                       //
 //--------------------------------------------------------//
@@ -176,18 +191,30 @@ const syncManagerGameweek = asyncHandler(async (req, res) => {
  * @route   POST /api/fpl/sync-player-gameweek/:playerId
  * @desc    Sync specified player's gameweek data to database
  */
-const syncPlayerGameweek = asyncHandler(
-    async (req, res) => {
-        try {
-            const { playerId } = req.params
-            const result = await fplSyncService.syncPlayerGameweek(playerId)
-            res.status(200).json(result)
-        } catch (error) {
-            console.error("Error syncing player gameweek data: ", error.message)
-            res.status(500).json({ message: "Failed to sync player gameweek data" })
-        }
+const syncPlayerGameweek = asyncHandler(async (req, res) => {
+    try {
+        const { playerId } = req.params
+        const result = await fplSyncService.syncPlayerGameweek(playerId)
+        res.status(200).json(result)
+    } catch (error) {
+        console.error("Error syncing player gameweek data: ", error.message)
+        res.status(500).json({ message: "Failed to sync player gameweek data" })
     }
-)
+})
+
+/**
+ * @route   POST /api/fpl/sync-all-player-gameweeks
+ * @desc    Sync all active players' gameweek data to database
+ */
+const syncAllPlayersGameweek = asyncHandler(async (req, res) => {
+    try {
+        const result = await fplSyncService.syncAllPlayersGameweek()
+        res.status(200).json(result)
+    } catch (error) {
+        console.error("Error syncing all player gameweek data: ", error.message)
+        res.status(500).json({ message: "Failed to sync all player gameweek data" })
+    }
+})
 
 module.exports = {
     getBootstrap,
@@ -196,10 +223,12 @@ module.exports = {
     getManagerGameweek,
     getManagerSquad,
     getPlayerGameweek,
+    getAllPlayersGameweek,
     
     syncBootstrap,
     syncFixtures,
     syncManager,
     syncManagerGameweek,
-    syncPlayerGameweek
+    syncPlayerGameweek,
+    syncAllPlayersGameweek
 }

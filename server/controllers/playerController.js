@@ -92,10 +92,28 @@ const getPlayerFixtures = asyncHandler(async (req, res) => {
     })
 })
 
+// Get player analysis
+const getPlayerAnalysis = asyncHandler(async (req, res) => {
+    const playerId = Number(req.params.playerId)
+    if (!Number.isInteger(playerId)) {
+        res.status(400)
+        throw new Error("Invalid player ID")
+    }
+
+    const analysis = await playerService.getPlayerAnalysis(playerId)
+    if (!analysis) {
+        res.status(404)
+        throw new Error("Player not found")
+    }
+
+    res.status(200).json(analysis)
+})
+
 module.exports = {
     getPlayers,
     getPlayer,
     getPlayerGameweeks,
     getPlayerSeasons,
-    getPlayerFixtures
+    getPlayerFixtures,
+    getPlayerAnalysis
 }

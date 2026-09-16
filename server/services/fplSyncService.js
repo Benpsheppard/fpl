@@ -3,6 +3,7 @@
 // Models
 const Player = require("../models/playerModel")
 const PlayerGameweek = require("../models/playerGameweekModel")
+const PlayerSeason = require("../models/playerSeasonModel")
 const Team = require("../models/teamModel")
 const Fixture = require("../models/fixtureModel")
 const Manager = require("../models/managerModel")
@@ -697,11 +698,132 @@ const syncAllPlayersGameweek = async () => {
     }
 }
 
+// Sync Player Past season's data to Database
+const syncPlayerSeasons = async (playerId) => {
+    const data = await fplService.getPlayerGameweek(playerId)
+
+    const historyPast = data.history_past || []
+
+    const operations = historyPast.map((season) => ({
+        updateOne: {
+            filter: {
+                playerId,
+                seasonName: season.season_name,
+            },
+
+            update: {
+                $set: {
+                    playerId,
+                    seasonName: season.season_name,
+
+                    elementCode: season.element_code,
+
+                    startCost: season.start_cost,
+                    endCost: season.end_cost,
+
+                    totalPoints: season.total_points,
+                    minutes: season.minutes,
+
+                    goalsScored: season.goals_scored,
+                    assists: season.assists,
+
+                    cleanSheets: season.clean_sheets,
+                    goalsConceded: season.goals_conceded,
+
+                    ownGoals: season.own_goals,
+
+                    penaltiesSaved: season.penalties_saved,
+                    penaltiesMissed: season.penalties_missed,
+
+                    yellowCards: season.yellow_cards,
+                    redCards: season.red_cards,
+
+                    saves: season.saves,
+
+                    bonus: season.bonus,
+                    bps: season.bps,
+
+                    influence: Number(season.influence),
+                    creativity: Number(season.creativity),
+                    threat: Number(season.threat),
+                    ictIndex: Number(season.ict_index),
+
+                    clearancesBlocksInterceptions: season.clearances_blocks_interceptions,
+
+                    recoveries: season.recoveries,
+
+                    tackles: season.tackles,
+
+                    defensiveContribution: season.defensive_contribution,
+
+                    starts: season.starts,
+
+                    expectedGoals: Number(season.expected_goals),
+
+                    expectedAssists: Number(season.expected_assists),
+
+                    expectedGoalInvolvements: Number(season.expected_goal_involvements),
+
+                    expectedGoalsConceded: Number(season.expected_goals_conceded),
+                },
+            },
+
+            upsert: true
+        }
+    }))
+
+    const result = await PlayerSeason.bulkWrite(operations)
+
+    return { 
+        playerSeasons: {
+            matched: result.matchedCount,
+            modified: result.modifiedCount,
+            upserted: result.upsertedCount
+        }
+    }
+}
+
+// Sync All Player Past season's data to Database
+const syncAllPlayersSeasons = async () => {
+    const players = await Player.find({ removed: false }).select("fplId").lean()
+
+    const limit = pLimit(10)
+
+    let successful = 0, failed = 0
+    const errors = []
+
+    await Promise.all(players.map((player) => limit(async () => {
+        try {
+            await syncPlayerSeasons(player.fplId)
+            successful++
+        } catch (error) {
+            failed++
+
+            errors.push({
+                playerId: player.fplId,
+                error: error.message
+            })
+        }
+    })))
+
+    return {
+        totalPlayers: players.length,
+        successful,
+        failed,
+        errors
+    }
+}
+
 module.exports = {
     syncBootstrap,
     syncFixtures,
+
     syncManager,
     syncManagerGameweek,
+
     syncPlayerGameweek,
-    syncAllPlayersGameweek
+    syncAllPlayersGameweek,
+
+    syncPlayerSeasons,
+    syncAllPlayersSeasons
 }

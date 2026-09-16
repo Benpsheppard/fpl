@@ -9,7 +9,8 @@ const {
     getBootstrap, getFixtures, getManager, getManagerGameweek, 
     getManagerSquad, getPlayerGameweek, getAllPlayersGameweek,
     syncBootstrap, syncFixtures, syncManager, syncManagerGameweek, 
-    syncPlayerGameweek,syncAllPlayersGameweek
+    syncPlayerGameweek,syncAllPlayersGameweek, syncPlayerSeasons,
+    syncAllPlayersSeasons
 } = require("../controllers/fplController")
 
 // Get routes
@@ -28,5 +29,7 @@ fplRouter.post("/sync-manager/:managerId", syncManager)
 fplRouter.post("/sync-gameweek/:managerId/:gameweek", syncManagerGameweek)
 fplRouter.post("/sync-player-gameweek/:playerId", syncPlayerGameweek)
 fplRouter.post("/sync-all-players-gameweek", syncAllPlayersGameweek)
+fplRouter.post("/sync-player-seasons/:playerId", syncPlayerSeasons)
+fplRouter.post("/sync-all-players-seasons", syncAllPlayersSeasons)
 
 module.exports = { fplRouter }

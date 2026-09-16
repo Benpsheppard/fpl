@@ -216,6 +216,35 @@ const syncAllPlayersGameweek = asyncHandler(async (req, res) => {
     }
 })
 
+/**
+ * @route   POST /api/fpl/sync-player-season
+ * @desc    Sync player's past season data to database
+ */
+const syncPlayerSeasons = asyncHandler(async (req, res) => {
+    try {
+        const { playerId } = req.params
+        const result = await fplSyncService.syncPlayerSeasons(Number(playerId))
+        res.status(200).json(result)
+    } catch (error) {
+        console.error("Error syncing player seasons: ", error.message)
+        res.status(500).json({ message: "Failed to sync player seasons" })
+    }
+})
+
+/**
+ * @route   POST /api/fpl/sync-all-player-seasons
+ * @desc    Sync all player's past season data to database
+ */
+const syncAllPlayersSeasons = async (req, res) => {
+    try {
+        const result = await fplSyncService.syncAllPlayersSeasons()
+        res.status(200).json(result)
+    } catch (error) {
+        console.error("Error syncing all player seasons: ", error.message)
+        res.status(500).json({ message: "Failed to sync all player seasons" })
+    }
+}
+
 module.exports = {
     getBootstrap,
     getFixtures,
@@ -230,5 +259,7 @@ module.exports = {
     syncManager,
     syncManagerGameweek,
     syncPlayerGameweek,
-    syncAllPlayersGameweek
+    syncAllPlayersGameweek,
+    syncPlayerSeasons,
+    syncAllPlayersSeasons
 }

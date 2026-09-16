@@ -17,6 +17,7 @@
     "express": "^5.2.1",
     "express-async-handler": "^1.2.0",
     "mongodb": "^7.6.0",
-    "mongoose": "^9.9.5"
+    "mongoose": "^9.9.5",
+    "p-limit": "^3.1.0"
   }
 }

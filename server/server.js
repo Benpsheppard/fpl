@@ -9,6 +9,7 @@ const connectDB = require('./config/db.js')
 const { fplRouter } = require("./routes/fplRoutes")     
 const { playerRouter } = require('./routes/playerRoutes.js')
 const { predictionFeatureRouter } = require('./routes/predictionFeatureRoutes.js')
+const { trainingDatasetRouter } = require('./routes/trainingDatasetRoutes.js')
 
 // Variables
 const port = process.env.PORT || 5050
@@ -27,6 +28,7 @@ app.use(express.urlencoded())
 app.use("/api/fpl", fplRouter)
 app.use("/api/players", playerRouter)
 app.use("/api/prediction", predictionFeatureRouter)
+app.use("/api/training", trainingDatasetRouter)
 
 // Port listener
 app.listen(port, () => {

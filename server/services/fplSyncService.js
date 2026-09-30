@@ -671,7 +671,7 @@ const syncPlayerGameweek = async (playerId) => {
 const syncAllPlayersGameweek = async () => {
     const players = await Player.find({ removed: false }).select("fplId").lean()
 
-    const limit = pLimit(10)
+    const limit = pLimit(5)
 
     let successful = 0, failed = 0
     const errors = []
@@ -787,7 +787,7 @@ const syncPlayerSeasons = async (playerId) => {
 const syncAllPlayersSeasons = async () => {
     const players = await Player.find({ removed: false }).select("fplId").lean()
 
-    const limit = pLimit(10)
+    const limit = pLimit(5)
 
     let successful = 0, failed = 0
     const errors = []

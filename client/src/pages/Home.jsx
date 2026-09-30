@@ -1,6 +1,20 @@
+// Home.jsx
+
 const Home = () => {
     return (
-        <div>Home</div>
+        <section>
+            <div>
+                <h1>Home Page</h1>
+            </div>
+
+            {/* Search bar */}
+            <div>
+                <input 
+                    placeholder="Search Player..."
+                />
+            </div>
+
+        </section>
     )
 }
 

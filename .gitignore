@@ -3,3 +3,6 @@ node_modules/
 .env
 
 model_examples
+
+__pycache__
+catboost_info

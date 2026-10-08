@@ -467,7 +467,6 @@ const buildTrainingDataset = async () => {
             .get(season.playerId)
             .push(season)
     }
-    console.log(seasonsMap.get(411) || [])
 
     const fixturesMap = new Map()
     for (const fixture of fixtures) {
@@ -491,25 +490,55 @@ const buildTrainingDataset = async () => {
 
     // Build rows
     for (const player of players) {
-        const playerGameweeks = playerGameweeksMap.get(player.fplId) || []
+        const playerGameweeks = (playerGameweeksMap.get(player.fplId) || [])
+            .sort((a, b) => a.gameweek - b.gameweek)
 
-        if (playerGameweeks.length < 4) {
-            continue
-        }
+        for (const targetGameweek of playerGameweeks) {
+            const previousGameweeks = playerGameweeks.filter((gameweek) => gameweek.gameweek < targetGameweek.gameweek)
 
-        for (let i = 3; i < playerGameweeks.length; i++) {
-            const targetGameweek = playerGameweeks[i]
-            const previousGameweeks = playerGameweeks.slice(0, i)
+            const historicalFixturePerformance = previousGameweeks.map((gameweek) => {
+                const gameweekFixtures = fixturesMap.get(gameweek.gameweek) || []
+
+                const playerFixture = gameweekFixtures.find((fixture) =>
+                    fixture.homeTeam === player.team ||
+                    fixture.awayTeam === player.team
+                )
+
+                if (!playerFixture) {
+                    return null
+                }
+
+                const isHome = playerFixture.homeTeam === player.team
+
+                const difficulty = Number(
+                    isHome
+                        ? playerFixture.homeTeamDifficulty
+                        : playerFixture.awayTeamDifficulty
+                )
+
+                return {
+                    points: gameweek.totalPoints || 0,
+                    difficulty
+                }
+            }).filter(Boolean)
 
             const lastGameweek = previousGameweeks.slice(-1)
             const last3Gameweeks = previousGameweeks.slice(-3)
             const last5Gameweeks = previousGameweeks.slice(-5)
             const last10Gameweeks = previousGameweeks.slice(-10)
 
-            // Find player's fixture
-            const gameweekFixtures = fixturesMap.get( targetGameweek.gameweek ) || []
+            const recentPoints = last5Gameweeks.map((gameweek) => gameweek.totalPoints || 0)
+            const recentMaxPoints = recentPoints.length > 0 ? Math.max(...recentPoints) : 0
 
-            const fixture = gameweekFixtures.find((fixture) => fixture.homeTeam === player.team || fixture.awayTeam === player.team)
+            // Find player's fixture
+            const gameweekFixtures =
+                fixturesMap.get(targetGameweek.gameweek) || []
+
+            const fixture = gameweekFixtures.find(
+                (fixture) =>
+                    fixture.homeTeam === player.team ||
+                    fixture.awayTeam === player.team
+            )
 
             if (!fixture) {
                 continue
@@ -517,19 +546,39 @@ const buildTrainingDataset = async () => {
 
             const isHome = fixture.homeTeam === player.team
 
-            const opponentTeamId = isHome ? fixture.awayTeam : fixture.homeTeam
+            const opponentTeamId = isHome
+                ? fixture.awayTeam
+                : fixture.homeTeam
 
             const opponent = teamMap.get(opponentTeamId)
 
-            const difficulty = Number(isHome ? fixture.homeTeamDifficulty : fixture.awayTeamDifficulty)
+            const difficulty = Number(
+                isHome
+                    ? fixture.homeTeamDifficulty
+                    : fixture.awayTeamDifficulty
+            )
 
-            const opponentStrength = opponent ? Number(isHome ? opponent.strengthOverallAway : opponent.strengthOverallHome) : 0
+            const opponentStrength = opponent
+                ? Number(
+                    isHome
+                        ? opponent.strengthOverallAway
+                        : opponent.strengthOverallHome
+                )
+                : 0
 
-            const playerFeatures = calculatePlayerFeaturesForGameweek(player, previousGameweeks)
+            const playerFeatures =
+                calculatePlayerFeaturesForGameweek(
+                    player,
+                    previousGameweeks
+                )
 
-            const historicalSeasons = seasonsMap.get(player.fplId) || []
-            
-            const historical = calculateHistoricalFeaturesFromData(historicalSeasons)
+            const historicalSeasons =
+                seasonsMap.get(player.fplId) || []
+
+            const historical =
+                calculateHistoricalFeaturesFromData(
+                    historicalSeasons
+                )
 
             trainingRows.push({
                 playerId: player.fplId,
@@ -537,10 +586,19 @@ const buildTrainingDataset = async () => {
 
                 features: {
                     recent: {
-                        lastGameweek: calculateWindow(lastGameweek),
-                        last3Gameweeks: calculateWindow(last3Gameweeks),
-                        last5Gameweeks: calculateWindow(last5Gameweeks),
-                        last10Gameweeks: calculateWindow(last10Gameweeks)
+                        lastGameweek:
+                            calculateWindow(lastGameweek),
+
+                        last3Gameweeks:
+                            calculateWindow(last3Gameweeks),
+
+                        last5Gameweeks:
+                            calculateWindow(last5Gameweeks),
+
+                        last10Gameweeks:
+                            calculateWindow(last10Gameweeks),
+
+                        recentMaxPoints
                     },
 
                     availability:
@@ -552,6 +610,7 @@ const buildTrainingDataset = async () => {
                         ),
 
                     historical,
+                    historicalFixturePerformance,
 
                     fixtures: {
                         fixtureId: fixture.fplId,
@@ -565,8 +624,7 @@ const buildTrainingDataset = async () => {
                 },
 
                 target: {
-                    totalPoints:
-                        targetGameweek.totalPoints
+                    totalPoints: targetGameweek.totalPoints
                 }
             })
         }

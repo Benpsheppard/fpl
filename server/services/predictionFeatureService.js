@@ -369,6 +369,9 @@ const getPredictionFeatures = async (playerId) => {
     const last5Gameweeks = gameweeks.slice(0, 5)
     const last10Gameweeks = gameweeks.slice(0, 10)
 
+    const recentPoints = last5Gameweeks.map((gameweek) => gameweek.totalPoints || 0)
+    const recentMaxPoints = recentPoints.length > 0 ? Math.max(...recentPoints) : 0
+
     return {
         playerId,
 
@@ -376,7 +379,9 @@ const getPredictionFeatures = async (playerId) => {
             lastGameweek: calculateWindow(lastGameweek),
             last3Gameweeks: calculateWindow(last3Gameweeks),
             last5Gameweeks: calculateWindow(last5Gameweeks),
-            last10Gameweeks: calculateWindow(last10Gameweeks)
+            last10Gameweeks: calculateWindow(last10Gameweeks),
+
+            recentMaxPoints
         },
 
         availability: calculateAvailabilityFeatures(player, lastGameweek, last3Gameweeks, last5Gameweeks, last10Gameweeks),

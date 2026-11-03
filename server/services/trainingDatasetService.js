@@ -6,6 +6,7 @@ const PlayerSeason = require("../models/playerSeasonModel")
 const Fixture = require("../models/fixtureModel")
 
 const { buildFeatureSet } = require("./featureBuilder")
+const { getCachedDataset } = require("./datasetCache")
 
 const buildTrainingRow = async (playerId, gameweek) => {
     const player = await Player.findOne({ fplId: playerId, removed: false }).lean()
@@ -126,7 +127,7 @@ const buildTrainingDataset = async () => {
 
         const historicalSeasons = seasonsMap.get(player.fplId) || []
 
-        for (const targetGameweek of playerGameweeks) {
+        for (const [ index, targetGameweek ] of playerGameweeks.entries()) {
             // The fixture comes from the gameweek row itself, so a player who
             // changed team is matched to the team they were actually on
             const fixture = fixtureByIdMap.get(targetGameweek.fixtureId)
@@ -145,7 +146,7 @@ const buildTrainingDataset = async () => {
                     opponentTeamId: targetGameweek.opponentTeam,
                     isHome: targetGameweek.wasHome,
                     fixture,
-                    previousGameweeks: playerGameweeks.filter((gameweek) => gameweek.gameweek < targetGameweek.gameweek),
+                    previousGameweeks: playerGameweeks.slice(0, index), // sorted, one row per gameweek
                     seasons: historicalSeasons,
                     fixtures,
                     fixtureById: fixtureByIdMap
@@ -172,18 +173,24 @@ const buildTrainingDataset = async () => {
     console.log("Rows by gameweek:", rowsByGameweek)
 
     // Validate newly created dataset
-    const validation = await validateTrainingDataset(trainingRows)
-    console.log("Dataset validation: ", JSON.stringify(validation, null, 2))
+    const validation = await validateTrainingDataset(trainingRows, gameweeks)
+    console.log("Dataset validation: ", JSON.stringify({
+        ...validation,
+        issues: validation.issues.slice(0, 20)
+    }, null, 2))
+    if (validation.issueCount > 20) {
+        console.log(`...and ${validation.issueCount - 20} more issues`)
+    }
 
     return trainingRows
 }
 
-const validateTrainingDataset = async (trainingRows) => {
+const validateTrainingDataset = async (trainingRows, preloadedGameweeks) => {
     const issues = []
 
     const seenRows = new Set()
 
-    const gameweeks = await PlayerGameweek.find()
+    const gameweeks = preloadedGameweeks ?? await PlayerGameweek.find()
         .sort({ gameweek: 1 })
         .lean()
 
@@ -606,7 +613,19 @@ const calculateExpectedAvailability = (window) => {
     }
 }
 
+// Cached between syncs. maxGameweek trims the response to rows up to and including that gameweek.
+const getTrainingDataset = async ({ maxGameweek } = {}) => {
+    const dataset = await getCachedDataset(buildTrainingDataset)
+
+    if (maxGameweek === undefined) {
+        return dataset
+    }
+
+    return dataset.filter((row) => row.gameweek <= maxGameweek)
+}
+
 module.exports = {
     buildTrainingRow,
-    buildTrainingDataset
+    buildTrainingDataset,
+    getTrainingDataset
 }

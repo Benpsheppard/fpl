@@ -14,6 +14,17 @@ const fplService = require("./fplService")
 
 // Imports
 const pLimit = require("p-limit")
+const { withSyncLock } = require("./syncLock")
+const { invalidateDatasetCache } = require("./datasetCache")
+
+// bulkWrite throws on an empty list, which is a normal case (e.g. a rookie with no past seasons)
+const bulkWriteIfAny = async (Model, operations) => {
+    if (operations.length === 0) {
+        return { matchedCount: 0, modifiedCount: 0, upsertedCount: 0 }
+    }
+
+    return Model.bulkWrite(operations)
+}
 
 // Sync Bootstrap data to Database
 const syncBootstrap = async () => {
@@ -262,6 +273,7 @@ const syncBootstrap = async () => {
     }))
 
     const playerResult = await Player.bulkWrite(playerOperations)
+    invalidateDatasetCache()
 
     return {
         teams: {
@@ -336,6 +348,7 @@ const syncFixtures = async () => {
     }))
 
     const fixtureResult = await Fixture.bulkWrite(fixtureOperations)
+    invalidateDatasetCache()
 
     return {
         fixtures: {
@@ -510,9 +523,43 @@ const syncManagerGameweek = async (managerId, gameweek) => {
     }
 }
 
+// Fields that are per-fixture totals and must be summed when a player has
+// more than one fixture in the same gameweek. Everything else (fixture,
+// opponent, kickoff, value, selected, transfers) keeps the first fixture's value.
+const SUMMED_HISTORY_FIELDS = [
+    "total_points", "minutes", "goals_scored", "assists", "clean_sheets",
+    "goals_conceded", "own_goals", "penalties_saved", "penalties_missed",
+    "yellow_cards", "red_cards", "saves", "bonus", "bps", "influence",
+    "creativity", "threat", "ict_index", "clearances_blocks_interceptions",
+    "recoveries", "tackles", "defensive_contribution", "starts",
+    "expected_goals", "expected_assists", "expected_goal_involvements",
+    "expected_goals_conceded"
+]
+
+// FPL history has one entry per fixture, so a double gameweek has two entries
+// with the same round. Collapse them into one entry per round.
+const combineDoubleGameweeks = (history) => {
+    const byRound = new Map()
+
+    for (const entry of history) {
+        const existing = byRound.get(entry.round)
+
+        if (!existing) {
+            byRound.set(entry.round, { ...entry })
+            continue
+        }
+
+        for (const field of SUMMED_HISTORY_FIELDS) {
+            existing[field] = Number(existing[field] ?? 0) + Number(entry[field] ?? 0)
+        }
+    }
+
+    return [...byRound.values()]
+}
+
 // Sync Player Gameweek data to Database
-const syncPlayerGameweek = async (playerId) => {
-    const data = await fplService.getPlayerGameweek(playerId)
+const syncPlayerGameweek = async (playerId, prefetched) => {
+    const data = prefetched ?? await fplService.getPlayerGameweek(playerId)
     if (!data) {
         throw new Error("Invalid player summary data received from FPL")
     }
@@ -521,7 +568,7 @@ const syncPlayerGameweek = async (playerId) => {
         throw new Error("Invalid player history data received from FPL")
     }
 
-    const playerGameweekOperations = data.history.map((history) => ({
+    const playerGameweekOperations = combineDoubleGameweeks(data.history).map((history) => ({
         updateOne: {
             filter: {
                 playerId: history.element,
@@ -656,7 +703,8 @@ const syncPlayerGameweek = async (playerId) => {
         }
     }))
 
-    const playerGameweekResult = await PlayerGameweek.bulkWrite(playerGameweekOperations)
+    const playerGameweekResult = await bulkWriteIfAny(PlayerGameweek, playerGameweekOperations)
+    invalidateDatasetCache()
 
     return {
         playerGameweeks: {
@@ -668,7 +716,7 @@ const syncPlayerGameweek = async (playerId) => {
 }
 
 // Sync all Player's Gameweek data to Database
-const syncAllPlayersGameweek = async () => {
+const syncAllPlayersGameweek = () => withSyncLock("all-players-gameweek", async () => {
     const players = await Player.find({ removed: false }).select("fplId").lean()
 
     const limit = pLimit(5)
@@ -696,11 +744,14 @@ const syncAllPlayersGameweek = async () => {
         failed,
         errors
     }
-}
+})
 
 // Sync Player Past season's data to Database
-const syncPlayerSeasons = async (playerId) => {
-    const data = await fplService.getPlayerGameweek(playerId)
+const syncPlayerSeasons = async (playerId, prefetched) => {
+    const data = prefetched ?? await fplService.getPlayerGameweek(playerId)
+    if (!data) {
+        throw new Error("Invalid player summary data received from FPL")
+    }
 
     const historyPast = data.history_past || []
 
@@ -772,7 +823,8 @@ const syncPlayerSeasons = async (playerId) => {
         }
     }))
 
-    const result = await PlayerSeason.bulkWrite(operations)
+    const result = await bulkWriteIfAny(PlayerSeason, operations)
+    invalidateDatasetCache()
 
     return { 
         playerSeasons: {
@@ -784,7 +836,7 @@ const syncPlayerSeasons = async (playerId) => {
 }
 
 // Sync All Player Past season's data to Database
-const syncAllPlayersSeasons = async () => {
+const syncAllPlayersSeasons = () => withSyncLock("all-players-seasons", async () => {
     const players = await Player.find({ removed: false }).select("fplId").lean()
 
     const limit = pLimit(5)
@@ -812,7 +864,48 @@ const syncAllPlayersSeasons = async () => {
         failed,
         errors
     }
+})
+
+// Sync one player's gameweek and past season data from a single FPL request
+const syncPlayerHistory = async (playerId) => {
+    const data = await fplService.getPlayerGameweek(playerId)
+
+    return {
+        ...await syncPlayerGameweek(playerId, data),
+        ...await syncPlayerSeasons(playerId, data)
+    }
 }
+
+// Sync every active player's gameweek and past season data, one request per player
+const syncAllPlayersHistory = () => withSyncLock("all-players-history", async () => {
+    const players = await Player.find({ removed: false }).select("fplId").lean()
+
+    const limit = pLimit(5)
+
+    let successful = 0, failed = 0
+    const errors = []
+
+    await Promise.all(players.map((player) => limit(async () => {
+        try {
+            await syncPlayerHistory(player.fplId)
+            successful++
+        } catch (error) {
+            failed++
+
+            errors.push({
+                playerId: player.fplId,
+                error: error.message
+            })
+        }
+    })))
+
+    return {
+        totalPlayers: players.length,
+        successful,
+        failed,
+        errors
+    }
+})
 
 module.exports = {
     syncBootstrap,
@@ -821,9 +914,13 @@ module.exports = {
     syncManager,
     syncManagerGameweek,
 
+    combineDoubleGameweeks,
     syncPlayerGameweek,
     syncAllPlayersGameweek,
 
     syncPlayerSeasons,
-    syncAllPlayersSeasons
+    syncAllPlayersSeasons,
+
+    syncPlayerHistory,
+    syncAllPlayersHistory
 }

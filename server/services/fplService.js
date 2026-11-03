@@ -1,7 +1,9 @@
 // fplService.js
 
 // Imports
-const axios = require("axios")
+const pLimit = require("p-limit")
+
+const { getWithRetry } = require("./httpRetry")
 
 const Player = require('../models/playerModel')
 
@@ -9,35 +11,35 @@ const FPL_API_URL = process.env.FPL_API_URL
 
 // Get bootstrap data
 const getBootstrap = async () => {
-    const response = await axios.get(`${FPL_API_URL}/bootstrap-static/`)
+    const response = await getWithRetry(`${FPL_API_URL}/bootstrap-static/`)
 
     return response.data
 }
 
 // Get all fixtures
 const getFixtures = async () => {
-    const response = await axios.get(`${FPL_API_URL}/fixtures`)
+    const response = await getWithRetry(`${FPL_API_URL}/fixtures`)
 
     return response.data
 }
 
 // Get manager data
 const getManager = async (managerId) => {
-    const response = await axios.get(`${FPL_API_URL}/entry/${managerId}`)
+    const response = await getWithRetry(`${FPL_API_URL}/entry/${managerId}`)
 
     return response.data
 }
 
 // Get manager gameweek data
 const getManagerGameweek = async (managerId, gameweek) => {
-    const response = await axios.get(`${FPL_API_URL}/entry/${managerId}/event/${gameweek}/picks`)
+    const response = await getWithRetry(`${FPL_API_URL}/entry/${managerId}/event/${gameweek}/picks`)
 
     return response.data
 }
 
 // Get player gameweek data
 const getPlayerGameweek = async (playerId) => {
-    const response = await axios.get(`${FPL_API_URL}/element-summary/${playerId}`)
+    const response = await getWithRetry(`${FPL_API_URL}/element-summary/${playerId}`)
 
     return response.data
 }
@@ -49,7 +51,9 @@ const getAllPlayersGameweek = async (limit = 10) => {
         .limit(Number(limit))
         .lean()
 
-    const playerGameweeks = await Promise.all(players.map(async (player) => {
+    const limitConcurrency = pLimit(5)
+
+    const playerGameweeks = await Promise.all(players.map((player) => limitConcurrency(async () => {
         const data = await getPlayerGameweek(player.fplId)
 
         return {
@@ -61,7 +65,7 @@ const getAllPlayersGameweek = async (limit = 10) => {
             },
             history: data.history
         }
-    }))
+    })))
 
     return playerGameweeks
 }

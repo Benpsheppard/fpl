@@ -10,6 +10,16 @@ const managerService = require("../services/managerService")
 //                      GET Routes                        //
 //--------------------------------------------------------//
 
+// A sync already running is a client-visible conflict (409); anything else is a 500
+const sendSyncError = (res, error, fallbackMessage) => {
+    if (error.statusCode) {
+        res.status(error.statusCode).json({ message: error.message })
+        return
+    }
+
+    res.status(500).json({ message: fallbackMessage })
+}
+
 /**
  * @route   GET /api/fpl/bootstrap
  * @desc    Retrieve bootstrap data from fpl api
@@ -193,7 +203,11 @@ const syncManagerGameweek = asyncHandler(async (req, res) => {
  */
 const syncPlayerGameweek = asyncHandler(async (req, res) => {
     try {
-        const { playerId } = req.params
+        const playerId = Number(req.params.playerId)
+        if (!Number.isInteger(playerId) || playerId <= 0) {
+            res.status(400).json({ message: "playerId must be a positive integer" })
+            return
+        }
         const result = await fplSyncService.syncPlayerGameweek(playerId)
         res.status(200).json(result)
     } catch (error) {
@@ -212,7 +226,7 @@ const syncAllPlayersGameweek = asyncHandler(async (req, res) => {
         res.status(200).json(result)
     } catch (error) {
         console.error("Error syncing all player gameweek data: ", error.message)
-        res.status(500).json({ message: "Failed to sync all player gameweek data" })
+        sendSyncError(res, error, "Failed to sync all player gameweek data")
     }
 })
 
@@ -235,15 +249,29 @@ const syncPlayerSeasons = asyncHandler(async (req, res) => {
  * @route   POST /api/fpl/sync-all-player-seasons
  * @desc    Sync all player's past season data to database
  */
-const syncAllPlayersSeasons = async (req, res) => {
+const syncAllPlayersSeasons = asyncHandler(async (req, res) => {
     try {
         const result = await fplSyncService.syncAllPlayersSeasons()
         res.status(200).json(result)
     } catch (error) {
         console.error("Error syncing all player seasons: ", error.message)
-        res.status(500).json({ message: "Failed to sync all player seasons" })
+        sendSyncError(res, error, "Failed to sync all player seasons")
     }
-}
+})
+
+/**
+ * @route   POST /api/fpl/sync-all-players
+ * @desc    Sync all active players' gameweek and past season data using one FPL request per player
+ */
+const syncAllPlayersHistory = asyncHandler(async (req, res) => {
+    try {
+        const result = await fplSyncService.syncAllPlayersHistory()
+        res.status(200).json(result)
+    } catch (error) {
+        console.error("Error syncing all players: ", error.message)
+        sendSyncError(res, error, "Failed to sync all players")
+    }
+})
 
 module.exports = {
     getBootstrap,
@@ -261,5 +289,6 @@ module.exports = {
     syncPlayerGameweek,
     syncAllPlayersGameweek,
     syncPlayerSeasons,
-    syncAllPlayersSeasons
+    syncAllPlayersSeasons,
+    syncAllPlayersHistory
 }

@@ -6,3 +6,4 @@ model_examples
 
 __pycache__
 catboost_info
+python/models/*.joblib

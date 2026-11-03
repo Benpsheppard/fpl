@@ -1,0 +1,123 @@
+# two_stage_model.py
+#
+# Stage 1 predicts the chance a player appears at all. Stage 2 predicts points
+# from the usual features plus that probability. Training uses out-of-fold
+# probabilities (each gameweek scored by a classifier that has only seen
+# earlier gameweeks) so stage 2 never learns from probabilities that saw the
+# answer. At prediction time the classifier is trained on every gameweek.
+
+import os
+from datetime import datetime, timezone
+
+import joblib
+import pandas as pd
+
+from services.feature_processor import (
+    add_features,
+    flatten_training_row,
+    select_classifier_features,
+    select_regressor_features,
+)
+from services.predictor import (
+    generate_oof_appearance_probabilities,
+    train_random_forest_classifier,
+    train_random_forest_model,
+)
+
+PROBABILITY_COLUMN = "predicted_appearance_probability"
+
+MODEL_PATH = os.getenv(
+    "MODEL_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "two_stage.joblib"),
+)
+
+
+class ModelNotTrainedError(RuntimeError):
+    pass
+
+
+def train_two_stage_model(dataframe):
+    classifier_features = select_classifier_features(dataframe)
+    regressor_features = select_regressor_features(dataframe)
+
+    oof_probabilities = generate_oof_appearance_probabilities(dataframe, classifier_features)
+
+    # The earliest gameweek has no earlier data to score it, so it has no probability
+    usable = oof_probabilities.dropna().index
+    if len(usable) == 0:
+        raise ValueError("Not enough gameweeks to train: need at least two with both starters and non-starters")
+
+    X_regressor = dataframe.loc[usable, regressor_features].copy()
+    X_regressor[PROBABILITY_COLUMN] = oof_probabilities.loc[usable]
+    y_regressor = dataframe.loc[usable, "target_totalPoints"]
+
+    classifier = train_random_forest_classifier(
+        dataframe[classifier_features],
+        (dataframe["target_totalMinutes"] > 0).astype(int),
+    )
+    regressor = train_random_forest_model(X_regressor, y_regressor)
+
+    return {
+        "classifier": classifier,
+        "regressor": regressor,
+        "classifier_features": classifier_features,
+        "regressor_features": regressor_features,
+        "metadata": {
+            "trained_at": datetime.now(timezone.utc).isoformat(),
+            "rows": int(len(dataframe)),
+            "regressor_training_rows": int(len(usable)),
+            "trained_through_gameweek": int(dataframe["gameweek"].max()),
+            "classifier_feature_count": len(classifier_features),
+            "regressor_feature_count": len(regressor_features) + 1,
+        },
+    }
+
+
+def save_model(bundle, path=None):
+    path = path or MODEL_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    # Write then rename so a crash mid-save can't leave a half-written model
+    temporary_path = f"{path}.tmp"
+    joblib.dump(bundle, temporary_path)
+    os.replace(temporary_path, path)
+
+
+def load_model(path=None):
+    path = path or MODEL_PATH
+
+    if not os.path.exists(path):
+        raise ModelNotTrainedError("No trained model found. Train one first.")
+
+    return joblib.load(path)
+
+
+def prepare_prediction_dataframe(prediction_payloads):
+    """Turn Node prediction payloads into the same columns training used."""
+    rows = [flatten_training_row(payload) for payload in prediction_payloads]
+
+    return add_features(pd.DataFrame(rows))
+
+
+def predict_two_stage(bundle, dataframe):
+    missing = [
+        column
+        for column in bundle["classifier_features"] + bundle["regressor_features"]
+        if column not in dataframe.columns
+    ]
+    if missing:
+        raise ValueError(f"Prediction data is missing model features: {missing[:5]}")
+
+    probabilities = bundle["classifier"].predict_proba(dataframe[bundle["classifier_features"]])[:, 1]
+
+    X_regressor = dataframe[bundle["regressor_features"]].copy()
+    X_regressor[PROBABILITY_COLUMN] = probabilities
+
+    points = bundle["regressor"].predict(X_regressor)
+
+    return pd.DataFrame({
+        "playerId": dataframe["playerId"].to_numpy(),
+        "gameweek": dataframe["gameweek"].to_numpy(),
+        "appearance_probability": probabilities,
+        "predicted_points": points,
+    })

@@ -1,11 +1,28 @@
 # main.py
 
 # Imports
-from fastapi import FastAPI
+import hmac
+import os
+import threading
+
+from fastapi import Depends, FastAPI, Header, HTTPException
 import pandas as pd
 
 # Services
-from services.dataset_loader import load_training_dataset
+from services.dataset_loader import (
+    load_training_dataset,
+    load_prediction_features,
+    DatasetLoadError,
+    PlayerNotFoundError
+)
+from services.two_stage_model import (
+    train_two_stage_model,
+    predict_two_stage,
+    prepare_prediction_dataframe,
+    save_model,
+    load_model,
+    ModelNotTrainedError
+)
 from services.feature_processor import (
     prepare_training_dataframe, 
     add_features, 
@@ -176,4 +193,92 @@ def test_rolling_two_stage():
         "average_rmse": results["rmse"].mean(),
         "average_r2": results["r2"].mean(),
         "results": results.to_dict(orient="records")
+    }
+
+
+### Production two-stage model ###
+
+# The trained model is kept in memory and on disk, so restarts keep predicting
+model_bundle = None
+training_lock = threading.Lock()
+
+def get_model():
+    global model_bundle
+
+    if model_bundle is None:
+        try:
+            model_bundle = load_model()
+        except ModelNotTrainedError as error:
+            raise HTTPException(status_code=503, detail=str(error))
+
+    return model_bundle
+
+def require_api_key(x_api_key: str | None = Header(default=None)):
+    """Training is expensive and replaces the saved model, so it needs the API_KEY."""
+    expected = os.getenv("API_KEY")
+
+    if not expected:
+        raise HTTPException(status_code=503, detail="API_KEY is not configured on the server")
+
+    if not x_api_key or not hmac.compare_digest(x_api_key.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="Missing or invalid API key")
+
+@app.post("/model/train", dependencies=[Depends(require_api_key)])
+def train_model():
+    global model_bundle
+
+    if not training_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="Training already in progress")
+
+    try:
+        try:
+            dataset = load_training_dataset()
+        except DatasetLoadError as error:
+            raise HTTPException(status_code=502, detail=str(error))
+
+        dataframe = add_features(prepare_training_dataframe(dataset))
+
+        try:
+            bundle = train_two_stage_model(dataframe)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error))
+
+        save_model(bundle)
+        model_bundle = bundle
+
+        return bundle["metadata"]
+    finally:
+        training_lock.release()
+
+@app.get("/model")
+def model_info():
+    return get_model()["metadata"]
+
+@app.get("/predict/{player_id}")
+def predict(player_id: int):
+    bundle = get_model()
+
+    try:
+        payload = load_prediction_features(player_id)
+    except PlayerNotFoundError:
+        raise HTTPException(status_code=404, detail="No upcoming fixture or history for this player")
+    except DatasetLoadError as error:
+        raise HTTPException(status_code=502, detail=str(error))
+
+    try:
+        result = predict_two_stage(bundle, prepare_prediction_dataframe([payload])).iloc[0]
+    except ValueError as error:
+        # Feature columns changed since the model was trained
+        raise HTTPException(status_code=409, detail=f"{error}. Retrain the model.")
+
+    name = (payload.get("context") or {}).get("player") or {}
+
+    return {
+        "playerId": int(result["playerId"]),
+        "name": name.get("webName"),
+        "fullName": " ".join(part for part in (name.get("firstName"), name.get("secondName")) if part) or None,
+        "gameweek": int(result["gameweek"]),
+        "appearance_probability": float(result["appearance_probability"]),
+        "predicted_points": float(result["predicted_points"]),
+        "model_trained_through_gameweek": bundle["metadata"]["trained_through_gameweek"],
     }

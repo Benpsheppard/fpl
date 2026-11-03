@@ -16,6 +16,7 @@ from services.dataset_loader import (
     DatasetLoadError,
     PlayerNotFoundError
 )
+from services.model_comparison import compare_models, json_safe
 from services.two_stage_model import (
     train_two_stage_model,
     predict_two_stage,
@@ -288,3 +289,21 @@ def predict(player_id: int):
         "predicted_points": float(result["predicted_points"]),
         "model_trained_through_gameweek": bundle["metadata"]["trained_through_gameweek"],
     }
+
+
+@app.get("/dataset/test/compare")
+def compare_single_and_two_stage(start_gameweek: int = 3, end_gameweek: int | None = None):
+    """Single-stage vs two-stage on identical validation players, with a paired significance check."""
+    try:
+        dataset = load_training_dataset()
+    except DatasetLoadError as error:
+        raise HTTPException(status_code=502, detail=str(error))
+
+    dataframe = add_features(prepare_training_dataframe(dataset))
+
+    per_gameweek, summary = compare_models(dataframe, start_gameweek, end_gameweek)
+
+    if per_gameweek.empty:
+        raise HTTPException(status_code=422, detail="No gameweeks had enough data to compare")
+
+    return json_safe({**summary, "per_gameweek": per_gameweek.round(4).to_dict(orient="records")})

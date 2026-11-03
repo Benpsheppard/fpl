@@ -5,7 +5,7 @@ import logging
 import pandas as pd
 import numpy as np
 
-from services.predictor import (train_random_forest_model, train_random_forest_classifier, evaluate_model, generate_oof_appearance_probabilities)
+from services.predictor import (train_random_forest_model, train_random_forest_classifier, evaluate_model, evaluate_predictions, generate_oof_appearance_probabilities)
 from services.diagnostics import (inspect_model_data)
 
 logger = logging.getLogger(__name__)
@@ -215,6 +215,9 @@ def flatten_training_row(row):
     }
 
     return flattened
+
+# Stage 1's output, fed to stage 2 as a feature
+PROBABILITY_COLUMN = "predicted_appearance_probability"
 
 # Columns that never go into a model, whatever the feature set
 IDENTIFIER_COLUMNS = ["playerId", "gameweek"]
@@ -634,6 +637,75 @@ def run_rolling_validation(dataframe, start_gameweek=5, end_gameweek=None):
 
 ### Rolling Two-stage Prep
 
+def fit_two_stage_fold(dataframe, validation_gameweek):
+    """Fit both stages on gameweeks before validation_gameweek and predict that gameweek.
+
+    Returns None when there is no data to train or validate on. Otherwise returns the
+    regressor's training rows (with the appearance probability column), the validation
+    rows, the actual points, and the two-stage predictions.
+    """
+    train_df, validation_df = split_training_data(dataframe, validation_gameweek)
+
+    if train_df.empty or validation_df.empty:
+        return None
+
+    # STAGE 1: Appearance classifier
+    (X_classifier_train, y_classifier_train, X_classifier_validation, y_classifier_validation, classifier_features, oof_probabilities) = prepare_classifier_model_data(dataframe, validation_gameweek)
+
+    # STAGE 2: Points regressor data
+    (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data(dataframe, validation_gameweek)
+
+    # Prevent target leakage
+    for columns in [X_classifier_train.columns, X_classifier_validation.columns, X_train.columns, X_validation.columns]:
+        assert not any(col.startswith("target_") for col in columns), "Target leakage detected"
+
+    assert oof_probabilities.index.is_unique
+    assert X_train.index.is_unique
+    assert X_validation.index.is_unique
+
+    # Fit classifier on all previous gameweeks
+    classifier = train_random_forest_classifier(X_classifier_train, y_classifier_train)
+
+    validation_probabilities = pd.Series(
+        classifier.predict_proba(X_classifier_validation)[:, 1],
+        index=X_classifier_validation.index
+    )
+
+    # Copy to avoid modifying original dataframes
+    X_train = X_train.copy()
+    X_validation = X_validation.copy()
+
+    # Training probabilities come from earlier gameweeks only (out-of-fold)
+    X_train[PROBABILITY_COLUMN] = oof_probabilities.reindex(X_train.index)
+    X_validation[PROBABILITY_COLUMN] = validation_probabilities.reindex(X_validation.index)
+
+    # The earliest gameweeks have no earlier data to score them
+    usable_indices = X_train[PROBABILITY_COLUMN].dropna().index
+
+    X_train = X_train.loc[usable_indices]
+    y_train = y_train.loc[usable_indices]
+
+    # Validation must include every player
+    if X_validation[PROBABILITY_COLUMN].isna().any():
+        raise ValueError(f"Missing validation probabilities for GW{validation_gameweek}")
+
+    if X_train.empty:
+        return None
+
+    # Both stages must cover the same validation rows
+    if set(X_validation.index) != set(X_classifier_validation.index):
+        raise ValueError("Classifier and regressor validation rows do not match")
+
+    regressor = train_random_forest_model(X_train, y_train)
+
+    return {
+        "X_train": X_train,
+        "y_train": y_train,
+        "X_validation": X_validation,
+        "y_validation": y_validation,
+        "predictions": pd.Series(regressor.predict(X_validation), index=X_validation.index),
+    }
+
 def run_rolling_two_stage_validation(dataframe, start_gameweek=2, end_gameweek=None):
     if end_gameweek is None:
         end_gameweek = int(dataframe["gameweek"].max())
@@ -643,113 +715,26 @@ def run_rolling_two_stage_validation(dataframe, start_gameweek=2, end_gameweek=N
     for validation_gameweek in range(start_gameweek, end_gameweek + 1):
         logger.info(f"\n=== TWO-STAGE VALIDATION GW" f"{validation_gameweek} ===")
 
-        # STAGE 1: Appearance classifier
-        (X_classifier_train, y_classifier_train, X_classifier_validation, y_classifier_validation, classifier_features, oof_probabilities) = prepare_classifier_model_data(dataframe, validation_gameweek)
+        fold = fit_two_stage_fold(dataframe, validation_gameweek)
 
-        # STAGE 2: Points regressor data
-        (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data(dataframe, validation_gameweek)
-
-        if (
-            X_classifier_train.empty
-            or X_classifier_validation.empty
-            or X_train.empty
-            or X_validation.empty
-        ):
+        if fold is None:
             logger.info("Skipping: insufficient data")
             continue
 
-        # Prevent target leakage
-        for columns in [X_classifier_train.columns, X_classifier_validation.columns, X_train.columns, X_validation.columns]:
-            assert not any(col.startswith("target_") for col in columns), "Target leakage detected"
+        model_results = evaluate_predictions(fold["y_validation"], fold["predictions"])
 
-        # Ensure training probabilities come from
-        # earlier gameweeks only.
-        assert oof_probabilities.index.is_unique
-        assert X_train.index.is_unique
-        assert X_validation.index.is_unique
-
-        # Fit classifier on all previous gameweeks
-        classifier = train_random_forest_classifier(
-            X_classifier_train,
-            y_classifier_train
-        )
-
-        # Predict validation appearance probabilities
-        validation_probabilities = pd.Series(
-            classifier.predict_proba(
-                X_classifier_validation
-            )[:, 1],
-            index=X_classifier_validation.index
-        )
-
-        # Copy to avoid modifying original dataframes
-        X_train = X_train.copy()
-        X_validation = X_validation.copy()
-
-        X_train["predicted_appearance_probability"] = (
-            oof_probabilities.reindex(X_train.index)
-        )
-
-        X_validation["predicted_appearance_probability"] = (
-            validation_probabilities.reindex(
-                X_validation.index
-            )
-        )
-
-        # Early gameweeks may have no OOF probabilities.
-        usable_indices = X_train[
-            "predicted_appearance_probability"
-        ].dropna().index
-
-        X_train = X_train.loc[usable_indices]
-        y_train = y_train.loc[usable_indices]
-
-        # Validation must include every player.
-        if X_validation[
-            "predicted_appearance_probability"
-        ].isna().any():
-            raise ValueError(
-                f"Missing validation probabilities "
-                f"for GW{validation_gameweek}"
-            )
-
-        if X_train.empty:
-            logger.info("Skipping: no OOF training rows")
-            continue
-
-        # Verify both stages cover the same validation rows
-        if set(X_validation.index) != set(
-            X_classifier_validation.index
-        ):
-            raise ValueError(
-                "Classifier and regressor validation "
-                "rows do not match"
-            )
-
-        # Train stage 2
-        regressor = train_random_forest_model(
-            X_train,
-            y_train
-        )
-
-        model_results = evaluate_model(
-            regressor,
-            X_validation,
-            y_validation
-        )
-
-        logger.info(f"Training rows: {len(X_train)}")
-        logger.info(f"Validation rows: {len(X_validation)}")
-        logger.info(f"Features: {len(X_train.columns)}")
+        logger.info(f"Training rows: {len(fold['X_train'])}")
+        logger.info(f"Validation rows: {len(fold['X_validation'])}")
+        logger.info(f"Features: {len(fold['X_train'].columns)}")
         logger.info(f"MAE: {model_results['mae']:.4f}")
         logger.info(f"RMSE: {model_results['rmse']:.4f}")
         logger.info(f"R2: {model_results['r2']:.4f}")
 
         results.append({
             "gameweek": validation_gameweek,
-            "train_rows": len(X_train),
-            "validation_rows": len(X_validation),
-            "features": len(X_train.columns),
+            "train_rows": len(fold["X_train"]),
+            "validation_rows": len(fold["X_validation"]),
+            "features": len(fold["X_train"].columns),
             "mae": model_results["mae"],
             "rmse": model_results["rmse"],
             "r2": model_results["r2"]

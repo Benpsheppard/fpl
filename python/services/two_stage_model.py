@@ -13,6 +13,7 @@ import joblib
 import pandas as pd
 
 from services.feature_processor import (
+    PROBABILITY_COLUMN,
     add_features,
     flatten_training_row,
     select_classifier_features,
@@ -23,8 +24,6 @@ from services.predictor import (
     train_random_forest_classifier,
     train_random_forest_model,
 )
-
-PROBABILITY_COLUMN = "predicted_appearance_probability"
 
 MODEL_PATH = os.getenv(
     "MODEL_PATH",

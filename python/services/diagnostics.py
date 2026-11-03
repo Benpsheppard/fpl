@@ -94,7 +94,7 @@ def inspect_training_dataframe(dataframe):
         print(missing)
 
     print("\n=== UNIQUE VALUES ===")
-    for column in [ "playerId", "gameweek", "fixtures_isHome", "fixtures_difficulty", "fixtures_opponentStrength", "player_elementType" ]:
+    for column in [ "playerId", "gameweek", "fixtures_isHome", "fixtures_difficulty", "player_elementType" ]:
         print(f"{column}: {dataframe[column].nunique()} unique values")
 
     print("\n=== SAMPLES ===")

@@ -122,7 +122,6 @@ def flatten_training_row(row):
         # Fixture
         "fixtures_isHome": int(features["fixtures"]["isHome"]),
         "fixtures_difficulty": features["fixtures"]["difficulty"],
-        "fixtures_opponentStrength": features["fixtures"]["opponentStrength"],
 
         # Player
         "player_elementType": features["player"]["elementType"],

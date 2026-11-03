@@ -3,108 +3,20 @@
 const PlayerGameweek = require("../models/playerGameweekModel")
 const Player = require("../models/playerModel")
 const Fixture = require("../models/fixtureModel")
-const Team = require("../models/teamModel")
 const PlayerSeason = require("../models/playerSeasonModel")
 
-const calculateWindow = (window) => {
-    const minutes = window.reduce( (sum, gameweek) => sum + (gameweek.minutes || 0), 0 )
-    const totalPoints = window.reduce( (sum, gameweek) => sum + (gameweek.totalPoints || 0), 0 )
+const { buildFeatureSet } = require("./featureBuilder")
 
-    const goals = window.reduce( (sum, gameweek) => sum + (gameweek.goalsScored || 0), 0 )
-    const assists = window.reduce( (sum, gameweek) => sum + (gameweek.assists || 0), 0 )
-
-    const xG = Number( window .reduce((sum, gameweek) => sum + (gameweek.expectedGoals || 0), 0) .toFixed(2) )
-    const xA = Number( window .reduce((sum, gameweek) => sum + (gameweek.expectedAssists || 0), 0) .toFixed(2) )
-    const xGI = Number( window .reduce((sum, gameweek) => sum + (gameweek.expectedGoalInvolvements || 0), 0) .toFixed(2) )
-
-    const starts = window.reduce( (sum, gameweek) => sum + (gameweek.starts || 0), 0 )
-    const appearances = window.filter( (gameweek) => (gameweek.minutes || 0) > 0 ).length
-
-    const pointsPer90 = minutes > 0 ? Number(((totalPoints / minutes) * 90).toFixed(2)) : 0
-
-    const goalsPer90 = minutes > 0 ? Number(((goals / minutes) * 90).toFixed(2)) : 0
-    const assistsPer90 = minutes > 0 ? Number(((assists / minutes) * 90).toFixed(2)) : 0
-
-    const xGPer90 = minutes > 0 ? Number(((xG / minutes) * 90).toFixed(2)) : 0
-    const xAPer90 = minutes > 0 ? Number(((xA / minutes) * 90).toFixed(2)) : 0
-    const xGIPer90 = minutes > 0 ? Number(((xGI / minutes) * 90).toFixed(2)) : 0
-
-    const startRate = window.length > 0 ? Number(((starts / window.length) * 100).toFixed(2)) : 0
-    const appearanceRate = window.length > 0 ? Number(((appearances / window.length) * 100).toFixed(2)) : 0
-
-    return {
-        gameweeks: window.length,
-
-        totalPoints,
-        minutes,
-
-        goals,
-        assists,
-        xG,
-        xA,
-        xGI,
-
-        starts,
-        appearances,
-
-        pointsPer90,
-        goalsPer90,
-        assistsPer90,
-        xGPer90,
-        xAPer90,
-        xGIPer90,
-
-        startRate,
-        appearanceRate
-    }
+const getUpcomingFixtures = (fixtures, playerTeamId, now) => {
+    return fixtures
+        .filter((fixture) => fixture.homeTeam === playerTeamId || fixture.awayTeam === playerTeamId)
+        .filter((fixture) => fixture.kickoffTime && new Date(fixture.kickoffTime) > now)
+        .sort((a, b) => new Date(a.kickoffTime) - new Date(b.kickoffTime))
 }
 
-const calculateAvailabilityFeatures = (player, last, last3, last5, last10) => {
-    const calculateAvailabilityWindow = (window) => {
-        const minutes = window.reduce( (sum, gameweek) => sum + (gameweek.minutes || 0), 0 )
-        const minutesPerGame = window.length > 0 ? Number((minutes / window.length).toFixed(2)) : 0
-
-        const starts = window.reduce( (sum, gameweek) => sum + (gameweek.starts || 0), 0 )
-        const appearances = window.filter( (gameweek) => (gameweek.minutes || 0) > 0 ).length
-
-        const startRate = window.length > 0 ? Number(((starts / window.length) * 100).toFixed(2)) : 0
-        const appearanceRate = window.length > 0 ? Number(((appearances / window.length) * 100).toFixed(2)) : 0
-
-        return {
-            gameweeks: window.length,
-            minutes,
-            starts,
-            appearances,
-            minutesPerGame,
-            startRate,
-            appearanceRate
-        }
-    }
-
-    return {
-        status: player.status,
-
-        chanceOfPlayingThisRound: player.chanceOfPlayingThisRound,
-        chanceOfPlayingNextRound: player.chanceOfPlayingNextRound,
-
-        lastGameweek: calculateAvailabilityWindow(last),
-        last3Gameweeks: calculateAvailabilityWindow(last3),
-        last5Gameweeks: calculateAvailabilityWindow(last5),
-        last10Gameweeks: calculateAvailabilityWindow(last10)
-    }
-}
-
-const calculateFixtureFeatures = async (playerTeamId) => {
-    const fixtures = await Fixture.find({ $or: [{ homeTeam: playerTeamId }, { awayTeam: playerTeamId }] })
-        .sort({ kickoffTime: 1 })
-        .lean()
-
-    const now = new Date()
-    const upcomingFixtures = fixtures
-        .filter((fixture) => {
-            return fixture.kickoffTime && new Date(fixture.kickoffTime) > now
-        })
-
+// Schedule outlook shown alongside the features. It is not part of the model
+// schema because training has no equivalent for it.
+const calculateFixtureLookahead = (playerTeamId, upcomingFixtures, now) => {
     if (upcomingFixtures.length === 0) {
         return {
             next5: {
@@ -125,26 +37,16 @@ const calculateFixtureFeatures = async (playerTeamId) => {
         }
     }
 
-    const teamIds = upcomingFixtures.flatMap((fixture) => [ fixture.homeTeam, fixture.awayTeam ])
-    const teams = await Team.find({ fplId: { $in: teamIds } }).lean()
-    const teamMap = new Map(teams.map((team) => [team.fplId, team]))
-
     const fixtureFeatures = upcomingFixtures.map((fixture) => {
         const isHome = fixture.homeTeam === playerTeamId
 
-        const opponentTeamId = isHome ? fixture.awayTeam : fixture.homeTeam
-        const opponent = teamMap.get(opponentTeamId)
-        
         const difficulty = Number(isHome ? fixture.homeTeamDifficulty : fixture.awayTeamDifficulty)
-
-        const opponentStrength = opponent ? Number(isHome ? opponent.strengthOverallAway : opponent.strengthOverallHome) : 0
 
         return {
             fixtureId: fixture.fplId,
             gameweek: fixture.gameweek,
             isHome,
             difficulty,
-            opponentStrength,
             kickoffTime: fixture.kickoffTime
         }
     })
@@ -213,137 +115,11 @@ const calculateFixtureFeatures = async (playerTeamId) => {
             ? {
                 gameweek: nextFixture.gameweek,
                 isHome: nextFixture.isHome,
-                difficulty: nextFixture.difficulty,
-                opponentStrength: nextFixture.opponentStrength
+                difficulty: nextFixture.difficulty
             }
             : null,
 
         averageDaysBetweenFixtures
-    }
-}
-
-const calculateHistoricalFeatures = async (playerId) => {
-    const seasons = await PlayerSeason.find({
-        playerId: playerId
-    })
-        .sort({ seasonName: -1 })
-        .lean()
-
-    if (seasons.length === 0) {
-        return {
-            seasons: 0,
-            totalPoints: 0,
-            minutes: 0,
-            goals: 0,
-            assists: 0,
-            xG: 0,
-            xA: 0,
-            xGI: 0,
-            pointsPer90: 0,
-            goalsPer90: 0,
-            assistsPer90: 0,
-            xGPer90: 0,
-            xAPer90: 0,
-            xGIPer90: 0
-        }
-    }
-
-    const totalPoints = seasons.reduce( (sum, season) => sum + (season.totalPoints || 0), 0 )
-    const minutes = seasons.reduce( (sum, season) => sum + (season.minutes || 0), 0 )
-
-    const goals = seasons.reduce( (sum, season) => sum + (season.goalsScored || 0), 0 )
-    const assists = seasons.reduce( (sum, season) => sum + (season.assists || 0), 0 )
-
-    const xG = seasons.reduce( (sum, season) => sum + (season.expectedGoals || 0), 0 )
-    const xA = seasons.reduce( (sum, season) => sum + (season.expectedAssists || 0), 0 )
-    const xGI = seasons.reduce( (sum, season) => sum + (season.expectedGoalInvolvements || 0), 0 )
-
-    const pointsPer90 = minutes > 0 ? Number(((totalPoints / minutes) * 90).toFixed(2)) : 0
-
-    const goalsPer90 = minutes > 0 ? Number(((goals / minutes) * 90).toFixed(2)) : 0
-    const assistsPer90 = minutes > 0 ? Number(((assists / minutes) * 90).toFixed(2)) : 0
-    
-    const xGPer90 = minutes > 0 ? Number(((xG / minutes) * 90).toFixed(2)) : 0
-    const xAPer90 = minutes > 0 ? Number(((xA / minutes) * 90).toFixed(2)) : 0
-    const xGIPer90 = minutes > 0 ? Number(((xGI / minutes) * 90).toFixed(2)) : 0
-
-    return {
-        seasons: seasons.length,
-        totalPoints,
-
-        minutes,
-
-        goals,
-        assists,
-
-        xG: Number(xG.toFixed(2)),
-        xA: Number(xA.toFixed(2)),
-        xGI: Number(xGI.toFixed(2)),
-
-        pointsPer90,
-        goalsPer90,
-        assistsPer90,
-
-        xGPer90,
-        xAPer90,
-        xGIPer90
-    }
-}
-
-const calculatePlayerFeatures = (player) => {
-    return {
-        // Identity / position
-        elementType: player.elementType,
-
-        // Price / market
-        price: player.price,
-        selectedByPercent: player.selectedByPercent,
-        transfersIn: player.transfersIn,
-        transfersOut: player.transfersOut,
-
-        // Current production
-        form: player.form,
-        totalPoints: player.totalPoints,
-        pointsPerGame: player.pointsPerGame,
-
-        // Playing time
-        minutes: player.minutes,
-        starts: player.starts,
-
-        // Attacking output
-        goalsScored: player.goalsScored,
-        assists: player.assists,
-
-        // Defensive / goalkeeper output
-        cleanSheets: player.cleanSheets,
-        goalsConceded: player.goalsConceded,
-        saves: player.saves,
-
-        // FPL scoring
-        bonus: player.bonus,
-        bps: player.bps,
-
-        // Underlying performance
-        expectedGoals: player.expectedGoals,
-        expectedAssists: player.expectedAssists,
-        expectedGoalInvolvements: player.expectedGoalInvolvements,
-        expectedGoalsConceded: player.expectedGoalsConceded,
-
-        // ICT
-        influence: player.influence,
-        creativity: player.creativity,
-        threat: player.threat,
-        ictIndex: player.ictIndex,
-
-        // Discipline
-        yellowCards: player.yellowCards,
-        redCards: player.redCards,
-
-        // Defensive actions
-        clearancesBlocksInterceptions: player.clearancesBlocksInterceptions,
-        recoveries: player.recoveries,
-        tackles: player.tackles,
-        defensiveContribution: player.defensiveContribution
     }
 }
 
@@ -353,44 +129,57 @@ const getPredictionFeatures = async (playerId) => {
         return null
     }
 
-    const gameweeks = await PlayerGameweek.find({ playerId: playerId })
-        .sort({ gameweek: -1 })
-        .lean()
-    if (gameweeks.length === 0) {
+    const [ playerGameweeks, seasons, fixtures ] = await Promise.all([
+        PlayerGameweek.find({ playerId: playerId }).sort({ gameweek: 1 }).lean(),
+        PlayerSeason.find({ playerId: playerId }).lean(),
+        Fixture.find().lean()
+    ])
+    if (playerGameweeks.length === 0) {
         return null
     }
 
-    const fixtures = await calculateFixtureFeatures(player.team)
-    const historical = await calculateHistoricalFeatures(playerId)
-    const playerFeatures = calculatePlayerFeatures(player)
+    const now = new Date()
+    const upcomingFixtures = getUpcomingFixtures(fixtures, player.team, now)
+    const nextFixture = upcomingFixtures[0]
+    if (!nextFixture) {
+        return null
+    }
 
-    const lastGameweek = gameweeks.slice(0, 1)
-    const last3Gameweeks = gameweeks.slice(0, 3)
-    const last5Gameweeks = gameweeks.slice(0, 5)
-    const last10Gameweeks = gameweeks.slice(0, 10)
+    const isHome = nextFixture.homeTeam === player.team
+    const opponentTeamId = isHome ? nextFixture.awayTeam : nextFixture.homeTeam
 
-    const recentPoints = last5Gameweeks.map((gameweek) => gameweek.totalPoints || 0)
-    const recentMaxPoints = recentPoints.length > 0 ? Math.max(...recentPoints) : 0
+    // Same function the training dataset uses, with only gameweeks that come
+    // before the fixture being predicted
+    const features = buildFeatureSet({
+        player,
+        teamId: player.team,
+        opponentTeamId,
+        isHome,
+        fixture: nextFixture,
+        previousGameweeks: playerGameweeks.filter((gameweek) => gameweek.gameweek < nextFixture.gameweek),
+        seasons,
+        fixtures,
+        fixtureById: new Map(fixtures.map((fixture) => [ fixture.fplId, fixture ]))
+    })
 
     return {
         playerId,
+        gameweek: nextFixture.gameweek,
 
-        recent: {
-            lastGameweek: calculateWindow(lastGameweek),
-            last3Gameweeks: calculateWindow(last3Gameweeks),
-            last5Gameweeks: calculateWindow(last5Gameweeks),
-            last10Gameweeks: calculateWindow(last10Gameweeks),
+        features,
 
-            recentMaxPoints
-        },
-
-        availability: calculateAvailabilityFeatures(player, lastGameweek, last3Gameweeks, last5Gameweeks, last10Gameweeks),
-    
-        fixtures,
-        
-        historical,
-
-        player: playerFeatures
+        // Live information with no training equivalent, so not model inputs
+        context: {
+            player: {
+                firstName: player.firstName,
+                secondName: player.secondName,
+                webName: player.webName
+            },
+            status: player.status,
+            chanceOfPlayingThisRound: player.chanceOfPlayingThisRound,
+            chanceOfPlayingNextRound: player.chanceOfPlayingNextRound,
+            fixtureLookahead: calculateFixtureLookahead(player.team, upcomingFixtures, now)
+        }
     }
 }
 

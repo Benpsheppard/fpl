@@ -1,0 +1,243 @@
+{
+  "playerId": 1,
+  "gameweek": 4,
+  "features": {
+    "recent": {
+      "lastGameweek": {
+        "gameweeks": 1,
+        "totalPoints": 1,
+        "minutes": 90,
+        "goals": 0,
+        "assists": 0,
+        "xG": 0,
+        "xA": 0,
+        "xGI": 0,
+        "starts": 1,
+        "appearances": 1,
+        "pointsPer90": 1,
+        "goalsPer90": 0,
+        "assistsPer90": 0,
+        "xGPer90": 0,
+        "xAPer90": 0,
+        "xGIPer90": 0,
+        "startRate": 100,
+        "appearanceRate": 100
+      },
+      "last3Gameweeks": {
+        "gameweeks": 3,
+        "totalPoints": 9,
+        "minutes": 270,
+        "goals": 0,
+        "assists": 0,
+        "xG": 0,
+        "xA": 0,
+        "xGI": 0,
+        "starts": 3,
+        "appearances": 3,
+        "pointsPer90": 3,
+        "goalsPer90": 0,
+        "assistsPer90": 0,
+        "xGPer90": 0,
+        "xAPer90": 0,
+        "xGIPer90": 0,
+        "startRate": 100,
+        "appearanceRate": 100
+      },
+      "last5Gameweeks": {
+        "gameweeks": 3,
+        "totalPoints": 9,
+        "minutes": 270,
+        "goals": 0,
+        "assists": 0,
+        "xG": 0,
+        "xA": 0,
+        "xGI": 0,
+        "starts": 3,
+        "appearances": 3,
+        "pointsPer90": 3,
+        "goalsPer90": 0,
+        "assistsPer90": 0,
+        "xGPer90": 0,
+        "xAPer90": 0,
+        "xGIPer90": 0,
+        "startRate": 100,
+        "appearanceRate": 100
+      },
+      "last10Gameweeks": {
+        "gameweeks": 3,
+        "totalPoints": 9,
+        "minutes": 270,
+        "goals": 0,
+        "assists": 0,
+        "xG": 0,
+        "xA": 0,
+        "xGI": 0,
+        "starts": 3,
+        "appearances": 3,
+        "pointsPer90": 3,
+        "goalsPer90": 0,
+        "assistsPer90": 0,
+        "xGPer90": 0,
+        "xAPer90": 0,
+        "xGIPer90": 0,
+        "startRate": 100,
+        "appearanceRate": 100
+      },
+      "recentMaxPoints": 6
+    },
+    "availability": {
+      "lastGameweek": {
+        "gameweeks": 1,
+        "minutes": 90,
+        "starts": 1,
+        "appearances": 1,
+        "minutesPerGame": 90,
+        "startRate": 100,
+        "appearanceRate": 100
+      },
+      "last3Gameweeks": {
+        "gameweeks": 3,
+        "minutes": 270,
+        "starts": 3,
+        "appearances": 3,
+        "minutesPerGame": 90,
+        "startRate": 100,
+        "appearanceRate": 100
+      },
+      "last5Gameweeks": {
+        "gameweeks": 3,
+        "minutes": 270,
+        "starts": 3,
+        "appearances": 3,
+        "minutesPerGame": 90,
+        "startRate": 100,
+        "appearanceRate": 100
+      },
+      "last10Gameweeks": {
+        "gameweeks": 3,
+        "minutes": 270,
+        "starts": 3,
+        "appearances": 3,
+        "minutesPerGame": 90,
+        "startRate": 100,
+        "appearanceRate": 100
+      }
+    },
+    "historical": {
+      "seasons": 0,
+      "totalPoints": 0,
+      "minutes": 0,
+      "goals": 0,
+      "assists": 0,
+      "xG": 0,
+      "xA": 0,
+      "xGI": 0,
+      "pointsPer90": 0,
+      "goalsPer90": 0,
+      "assistsPer90": 0,
+      "xGPer90": 0,
+      "xAPer90": 0,
+      "xGIPer90": 0
+    },
+    "historicalFixturePerformance": [
+      {
+        "points": 6,
+        "difficulty": 2
+      },
+      {
+        "points": 2,
+        "difficulty": 4
+      },
+      {
+        "points": 1,
+        "difficulty": 2
+      }
+    ],
+    "fixtures": {
+      "fixtureId": 104,
+      "gameweek": 4,
+      "isHome": false,
+      "difficulty": 5
+    },
+    "player": {
+      "elementType": 3,
+      "totalPoints": 9,
+      "pointsPerGame": 3,
+      "minutes": 270,
+      "starts": 3,
+      "goalsScored": 0,
+      "assists": 0,
+      "cleanSheets": 0,
+      "goalsConceded": 0,
+      "saves": 0,
+      "penaltiesMissed": 0,
+      "penaltiesSaved": 0,
+      "ownGoals": 0,
+      "defensiveActions": 0,
+      "defensiveActionsPer90": 0,
+      "bonus": 0,
+      "bps": 0,
+      "expectedGoals": 0,
+      "expectedAssists": 0,
+      "expectedGoalInvolvements": 0,
+      "expectedGoalsConceded": 0,
+      "influence": 0,
+      "creativity": 0,
+      "threat": 0,
+      "ictIndex": 0,
+      "yellowCards": 0,
+      "redCards": 0,
+      "clearancesBlocksInterceptions": 0,
+      "recoveries": 0,
+      "tackles": 0,
+      "defensiveContribution": 0,
+      "pointsPer90": 3,
+      "value": 0,
+      "selected": 0,
+      "transfersIn": 0,
+      "transfersOut": 0
+    },
+    "team": {
+      "overall": {
+        "matches": 3,
+        "goalsScoredPerMatch": 1,
+        "goalsConcededPerMatch": 0.667,
+        "winRate": 0.333,
+        "drawRate": 0.333,
+        "lossRate": 0.333,
+        "cleanSheetRate": 0.333,
+        "pointsPerMatch": 1.333
+      },
+      "venue": {
+        "matches": 1,
+        "goalsScoredPerMatch": 1,
+        "goalsConcededPerMatch": 1,
+        "winRate": 0,
+        "drawRate": 1,
+        "lossRate": 0,
+        "cleanSheetRate": 0,
+        "pointsPerMatch": 1
+      },
+      "opponentOverall": {
+        "matches": 0,
+        "goalsScoredPerMatch": 0,
+        "goalsConcededPerMatch": 0,
+        "winRate": 0,
+        "drawRate": 0,
+        "lossRate": 0,
+        "cleanSheetRate": 0,
+        "pointsPerMatch": 0
+      },
+      "opponentVenue": {
+        "matches": 0,
+        "goalsScoredPerMatch": 0,
+        "goalsConcededPerMatch": 0,
+        "winRate": 0,
+        "drawRate": 0,
+        "lossRate": 0,
+        "cleanSheetRate": 0,
+        "pointsPerMatch": 0
+      }
+    }
+  }
+}

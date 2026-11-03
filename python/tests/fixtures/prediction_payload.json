@@ -157,7 +157,10 @@
       "fixtureId": 104,
       "gameweek": 4,
       "isHome": false,
-      "difficulty": 5
+      "difficulty": 5,
+      "fixturesInGameweek": 1,
+      "secondFixtureIsHome": false,
+      "secondFixtureDifficulty": 0
     },
     "player": {
       "elementType": 3,

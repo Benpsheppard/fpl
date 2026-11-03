@@ -104,3 +104,80 @@ def test_node_prediction_payload_flattens_to_model_columns():
     assert dataframe.loc[0, "target_totalPoints"] is None or pd.isna(dataframe.loc[0, "target_totalPoints"])
     assert fp.select_classifier_features(dataframe)
     assert fp.select_regressor_features(dataframe)
+
+
+from services.two_stage_model import MIN_DOUBLE_GAMEWEEK_TRAINING_ROWS, adjust_prediction  # noqa: E402
+
+
+def test_payload_flattens_the_double_gameweek_fields():
+    with open(FIXTURE) as handle:
+        payload = json.load(handle)
+    payload["features"]["fixtures"].update({"fixturesInGameweek": 2, "secondFixtureIsHome": True, "secondFixtureDifficulty": 4})
+
+    row = prepare_prediction_dataframe([payload]).iloc[0]
+
+    assert row["fixtures_fixturesInGameweek"] == 2
+    assert row["fixtures_secondFixtureIsHome"] == 1
+    assert row["fixtures_secondFixtureDifficulty"] == 4
+
+
+def test_classifier_knows_how_many_fixtures_a_gameweek_has():
+    assert "fixtures_fixturesInGameweek" in fp.CLASSIFIER_FEATURES
+
+
+def test_bundle_counts_the_double_gameweek_rows_it_trained_on():
+    data = synthetic_training_data()
+    data["fixtures_fixturesInGameweek"] = 1
+    data.loc[data.index[:30], "fixtures_fixturesInGameweek"] = 2
+
+    assert train_two_stage_model(data)["metadata"]["double_gameweek_training_rows"] == 30
+
+
+def test_bundle_without_double_gameweek_data_counts_zero(bundle):
+    assert bundle["metadata"]["double_gameweek_training_rows"] == 0
+
+
+def test_normal_gameweek_is_not_adjusted():
+    result = adjust_prediction(4.0, 1, 0, None)
+
+    assert result == {"predicted_points": 4.0, "expected_points": 4.0, "double_gameweek_scaled": False}
+
+
+def test_unseen_double_gameweek_scales_by_fixture_count():
+    result = adjust_prediction(4.0, 2, 0, None)
+
+    assert result["predicted_points"] == 8.0
+    assert result["double_gameweek_scaled"] is True
+
+
+def test_double_gameweek_is_trusted_once_the_model_has_seen_enough():
+    result = adjust_prediction(4.0, 2, MIN_DOUBLE_GAMEWEEK_TRAINING_ROWS, None)
+
+    assert result["predicted_points"] == 4.0
+    assert result["double_gameweek_scaled"] is False
+
+
+def test_just_below_the_threshold_still_scales():
+    assert adjust_prediction(4.0, 2, MIN_DOUBLE_GAMEWEEK_TRAINING_ROWS - 1, None)["double_gameweek_scaled"] is True
+
+
+def test_availability_weights_expected_points_but_not_predicted_points():
+    result = adjust_prediction(6.0, 1, 0, 0.5)
+
+    assert result["predicted_points"] == 6.0
+    assert result["expected_points"] == 3.0
+
+
+def test_a_player_who_will_not_play_has_zero_expected_points():
+    assert adjust_prediction(6.0, 1, 0, 0.0)["expected_points"] == 0.0
+
+
+def test_double_gameweek_scaling_and_availability_combine():
+    result = adjust_prediction(3.0, 2, 0, 0.5)
+
+    assert result["predicted_points"] == 6.0
+    assert result["expected_points"] == 3.0
+
+
+def test_unknown_availability_leaves_points_alone():
+    assert adjust_prediction(5.0, 1, 500, None)["expected_points"] == 5.0

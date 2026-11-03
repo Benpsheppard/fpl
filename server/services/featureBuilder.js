@@ -5,6 +5,8 @@
 // and semantics in both. The only thing that varies is the gameweek being
 // predicted: pass only gameweeks played before it as previousGameweeks.
 
+const kickoffMs = (fixture) => fixture.kickoffTime ? new Date(fixture.kickoffTime).getTime() : 0
+
 // Sum of a numeric field across rows, treating missing values as 0
 const sumBy = (rows, field) => rows.reduce((sum, row) => sum + (row[field] || 0), 0)
 
@@ -386,6 +388,18 @@ const buildFeatureSet = ({
 
     const targetGameweek = fixture.gameweek
 
+    // The team's other fixtures in this gameweek, earliest first. A double gameweek
+    // is two fixtures; the player's gameweek row sums points across both.
+    const otherFixtures = fixtures
+        .filter((candidate) =>
+            candidate.gameweek === fixture.gameweek &&
+            candidate.fplId !== fixture.fplId &&
+            (candidate.homeTeam === teamId || candidate.awayTeam === teamId)
+        )
+        .sort((a, b) => kickoffMs(a) - kickoffMs(b))
+    const secondFixture = otherFixtures[0]
+    const secondFixtureIsHome = secondFixture ? secondFixture.homeTeam === teamId : false
+
     return {
         recent: {
             lastGameweek: calculateWindow(lastGameweek),
@@ -410,7 +424,14 @@ const buildFeatureSet = ({
             fixtureId: fixture.fplId,
             gameweek: fixture.gameweek,
             isHome,
-            difficulty: Number(isHome ? fixture.homeTeamDifficulty : fixture.awayTeamDifficulty)
+            difficulty: Number(isHome ? fixture.homeTeamDifficulty : fixture.awayTeamDifficulty),
+
+            // 1 normally, 2+ in a double gameweek. The second fixture's details are 0 when there is none.
+            fixturesInGameweek: 1 + otherFixtures.length,
+            secondFixtureIsHome,
+            secondFixtureDifficulty: secondFixture
+                ? Number(secondFixtureIsHome ? secondFixture.homeTeamDifficulty : secondFixture.awayTeamDifficulty)
+                : 0
         },
 
         player: calculatePlayerFeaturesForGameweek(player, previousGameweeks),

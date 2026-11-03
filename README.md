@@ -86,8 +86,9 @@ After each gameweek, repeat steps 2, 3 and 4. The model does not retrain on its 
 |---|---|
 | `POST /model/train` | Train and save the two-stage model. Needs the API key. |
 | `GET /model` | Summary of the current model: rows, latest gameweek trained on. |
-| `GET /predict/{player_id}` | `appearance_probability`, `predicted_points`, name and gameweek for the player's next fixture. |
-| `GET /dataset/test*` | Validation experiments (single split, rolling, two-stage). Slow; they log metrics. |
+| `GET /predict/{player_id}` | Prediction for the player's next fixture. See [Reading a prediction](#reading-a-prediction). |
+| `GET /dataset/test/compare` | Single-stage vs two-stage on identical validation players, with a paired significance check. |
+| `GET /dataset/test*` | Other validation experiments (single split, rolling, two-stage). Slow; they log metrics. |
 
 `/predict` returns 503 with no trained model, 404 for an unknown player, 502 if the data service is down, and 409 if the
 features changed since training (retrain).
@@ -105,6 +106,31 @@ features changed since training (retrain).
 
 Reads are limited to 300 requests a minute and writes to 10. Ids must be plain integers; `gameweek` is 1 to 38.
 
+## Reading a prediction
+
+`GET /predict/{player_id}` returns, among other fields:
+
+| Field | Meaning |
+|---|---|
+| `model_points` | The model's raw output for the gameweek. |
+| `predicted_points` | `model_points`, scaled by the number of fixtures in a double gameweek the model hasn't learned from (below). |
+| `expected_points` | `predicted_points` weighted by the player's chance of playing. **Rank players by this.** |
+| `appearance_probability` | Stage 1's chance the player plays at all. `adjusted_appearance_probability` weights it by availability. |
+| `adjustments` | Exactly what was applied: the fixture count, whether it was scaled, and the availability status, chance, basis and source. |
+
+**Double gameweeks.** A player's points for a double gameweek are the sum of both fixtures, and the features include
+`fixturesInGameweek` and the second fixture's side and difficulty. But the model can only learn the effect from double
+gameweeks that have been played. Until it has seen at least 100 such rows (`double_gameweek_training_rows` in `GET /model`),
+`/predict` multiplies the model's figure by the fixture count and sets `scaled_by_fixture_count`. Once the schedule has
+double gameweeks and you have retrained after they are played, the model's own figure is used. The scaling ignores the
+second fixture's difficulty, and a gameweek already under way is predicted as a whole.
+
+**Injury news.** FPL publishes a chance of playing only for the coming round: the "next round" figure before a gameweek
+starts, the "this round" figure once it is under way. For a later gameweek there is no news (`basis: "none"`), so nothing
+is adjusted. With no percentage, an available player counts as 1 and an injured, suspended or unavailable player as 0. A
+doubtful player with no percentage is left unadjusted rather than guessed. Weighting by the chance slightly double-counts
+for players the model already expects to miss minutes, so treat `expected_points` as a ranking aid, not a forecast.
+
 ## Keeping the model honest
 
 The main risk is leakage: a feature that uses information from the gameweek being predicted.
@@ -112,7 +138,7 @@ The main risk is leakage: a feature that uses information from the gameweek bein
 - Training and prediction both build features with `buildFeatureSet` in [server/services/featureBuilder.js](server/services/featureBuilder.js),
   passing only gameweeks before the target one. Don't compute features anywhere else.
 - A player's team and opponent come from that gameweek's own record, not their current team.
-- Double gameweeks are summed into one row per player per gameweek.
+- Double gameweeks are summed into one row per player per gameweek, with the fixture count as a feature.
 - Stage 2 trains on out-of-fold appearance probabilities, each scored by a classifier that only saw earlier gameweeks.
 - The regressor uses every column except a list of exclusions (`REGRESSOR_EXCLUDED_FEATURES` in
   [feature_processor.py](python/services/feature_processor.py)), so **a new column is included automatically**.

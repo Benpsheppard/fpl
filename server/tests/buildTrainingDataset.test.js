@@ -137,3 +137,39 @@ test("rows are skipped when the gameweek has no fixture data", async () => {
     assert.equal(rowFor(rows, 2), undefined)
     assert.ok(rowFor(rows, 3))
 })
+
+test("a single-fixture gameweek has one fixture and no second fixture", async () => {
+    const rows = await build(transferData())
+    const fixtures = rowFor(rows, 4).features.fixtures
+
+    assert.equal(fixtures.fixturesInGameweek, 1)
+    assert.equal(fixtures.secondFixtureIsHome, false)
+    assert.equal(fixtures.secondFixtureDifficulty, 0)
+})
+
+test("a double gameweek records the second fixture", async () => {
+    const data = transferData()
+    // Team 10 also hosts team 60 in gameweek 3. The player's row (summed points) keeps the first fixture.
+    data.fixtures.push({ ...fixture(105, 3, 10, 60, 2, 1), kickoffTime: "2020-01-03T12:00:00Z" })
+    data.fixtures[2] = { ...data.fixtures[2], kickoffTime: "2020-01-01T12:00:00Z" }
+
+    const rows = await build(data)
+    const doubleWeek = rowFor(rows, 3).features.fixtures
+
+    assert.equal(doubleWeek.fixtureId, 103)
+    assert.equal(doubleWeek.fixturesInGameweek, 2)
+    assert.equal(doubleWeek.secondFixtureIsHome, true)
+    assert.equal(doubleWeek.secondFixtureDifficulty, 2)
+
+    // Other gameweeks are unaffected
+    assert.equal(rowFor(rows, 4).features.fixtures.fixturesInGameweek, 1)
+})
+
+test("a double gameweek counts only the player's own team", async () => {
+    const data = transferData()
+    data.fixtures.push(fixture(106, 3, 70, 80))
+
+    const rows = await build(data)
+
+    assert.equal(rowFor(rows, 3).features.fixtures.fixturesInGameweek, 1)
+})

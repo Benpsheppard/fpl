@@ -18,6 +18,7 @@ from services.dataset_loader import (
 )
 from services.model_comparison import compare_models, json_safe
 from services.two_stage_model import (
+    adjust_prediction,
     train_two_stage_model,
     predict_two_stage,
     prepare_prediction_dataframe,
@@ -273,20 +274,51 @@ def predict(player_id: int):
         raise HTTPException(status_code=502, detail=str(error))
 
     try:
-        result = predict_two_stage(bundle, prepare_prediction_dataframe([payload])).iloc[0]
+        prediction_frame = prepare_prediction_dataframe([payload])
+        result = predict_two_stage(bundle, prediction_frame).iloc[0]
+        features_row = prediction_frame.iloc[0]
     except ValueError as error:
         # Feature columns changed since the model was trained
         raise HTTPException(status_code=409, detail=f"{error}. Retrain the model.")
 
-    name = (payload.get("context") or {}).get("player") or {}
+    context = payload.get("context") or {}
+    name = context.get("player") or {}
+    availability = context.get("availability") or {}
+    chance = availability.get("chance")
+    fixtures_in_gameweek = int(features_row.get("fixtures_fixturesInGameweek", 1))
+    double_gameweek_rows = bundle["metadata"].get("double_gameweek_training_rows", 0)
+
+    adjusted = adjust_prediction(float(result["predicted_points"]), fixtures_in_gameweek, double_gameweek_rows, chance)
+    appearance_probability = float(result["appearance_probability"])
 
     return {
         "playerId": int(result["playerId"]),
         "name": name.get("webName"),
         "fullName": " ".join(part for part in (name.get("firstName"), name.get("secondName")) if part) or None,
         "gameweek": int(result["gameweek"]),
-        "appearance_probability": float(result["appearance_probability"]),
-        "predicted_points": float(result["predicted_points"]),
+
+        # What to rank by: the model's figure, adjusted for a double gameweek and for injury news
+        "expected_points": adjusted["expected_points"],
+        "predicted_points": adjusted["predicted_points"],
+        "model_points": float(result["predicted_points"]),
+
+        "appearance_probability": appearance_probability,
+        "adjusted_appearance_probability": appearance_probability if chance is None else appearance_probability * chance,
+
+        "fixtures_in_gameweek": fixtures_in_gameweek,
+        "adjustments": {
+            "double_gameweek": {
+                "fixtures": fixtures_in_gameweek,
+                "scaled_by_fixture_count": adjusted["double_gameweek_scaled"],
+                "model_training_rows": double_gameweek_rows,
+            },
+            "availability": {
+                "status": availability.get("status"),
+                "chance": chance,
+                "basis": availability.get("basis", "none"),
+                "source": availability.get("source", "none"),
+            },
+        },
         "model_trained_through_gameweek": bundle["metadata"]["trained_through_gameweek"],
     }
 

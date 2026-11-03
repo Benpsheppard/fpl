@@ -130,6 +130,9 @@ def flatten_training_row(row):
         # Fixture
         "fixtures_isHome": int(features["fixtures"]["isHome"]),
         "fixtures_difficulty": features["fixtures"]["difficulty"],
+        "fixtures_fixturesInGameweek": features["fixtures"]["fixturesInGameweek"],
+        "fixtures_secondFixtureIsHome": int(features["fixtures"]["secondFixtureIsHome"]),
+        "fixtures_secondFixtureDifficulty": features["fixtures"]["secondFixtureDifficulty"],
 
         # Player
         "player_elementType": features["player"]["elementType"],
@@ -283,6 +286,9 @@ CLASSIFIER_FEATURES = [
 
     "player_minutes",
     "player_starts",
+
+    # A second fixture makes appearing at least once more likely
+    "fixtures_fixturesInGameweek",
 ]
 
 # Regressor features are every column except these. A new column from

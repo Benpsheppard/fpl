@@ -7,6 +7,38 @@ const PlayerSeason = require("../models/playerSeasonModel")
 
 const { buildFeatureSet } = require("./featureBuilder")
 
+// Statuses that mean the player cannot play: injured, suspended, unavailable, not in squad
+const UNAVAILABLE_STATUSES = new Set([ "i", "s", "u", "n" ])
+
+// How likely the player is to be available for the gameweek being predicted, as 0-1 (null when unknown).
+// FPL only publishes news for the coming round: "next round" before a gameweek starts,
+// "this round" once it is under way. Anything further ahead has no news, so no adjustment.
+const getAvailability = (player, fixtures, targetGameweek) => {
+    const unfinished = fixtures.filter((fixture) => !fixture.finished && fixture.gameweek)
+    const nextRound = unfinished.length > 0 ? Math.min(...unfinished.map((fixture) => fixture.gameweek)) : null
+
+    if (targetGameweek !== nextRound) {
+        return { status: player.status, chance: null, basis: "none", source: "none" }
+    }
+
+    const roundStarted = fixtures.some((fixture) => fixture.finished && fixture.gameweek === nextRound)
+    const basis = roundStarted ? "this_round" : "next_round"
+    const reported = roundStarted ? player.chanceOfPlayingThisRound : player.chanceOfPlayingNextRound
+
+    // FPL leaves the percentage empty for fit players and for some who are out
+    if (reported !== null && reported !== undefined) {
+        return { status: player.status, chance: reported / 100, basis, source: "reported" }
+    }
+    if (player.status === "a") {
+        return { status: player.status, chance: 1, basis, source: "status" }
+    }
+    if (UNAVAILABLE_STATUSES.has(player.status)) {
+        return { status: player.status, chance: 0, basis, source: "status" }
+    }
+
+    return { status: player.status, chance: null, basis, source: "none" }
+}
+
 const getUpcomingFixtures = (fixtures, playerTeamId, now) => {
     return fixtures
         .filter((fixture) => fixture.homeTeam === playerTeamId || fixture.awayTeam === playerTeamId)
@@ -175,6 +207,7 @@ const getPredictionFeatures = async (playerId) => {
                 secondName: player.secondName,
                 webName: player.webName
             },
+            availability: getAvailability(player, fixtures, nextFixture.gameweek),
             status: player.status,
             chanceOfPlayingThisRound: player.chanceOfPlayingThisRound,
             chanceOfPlayingNextRound: player.chanceOfPlayingNextRound,

@@ -31,8 +31,34 @@ MODEL_PATH = os.getenv(
 )
 
 
+# A model that has seen fewer double-gameweek rows than this cannot be trusted to price them.
+# One double gameweek is roughly 250 player rows, so this asks for about half of one.
+MIN_DOUBLE_GAMEWEEK_TRAINING_ROWS = 100
+
+
 class ModelNotTrainedError(RuntimeError):
     pass
+
+
+def adjust_prediction(model_points, fixtures_in_gameweek, double_gameweek_training_rows, availability_chance):
+    """Turn the model's points into the figures a squad decision needs.
+
+    predicted_points: the model's output. In a double gameweek, if the model has barely
+        seen any (it can only learn them once they have been played), it is scaled by the
+        number of fixtures instead, since points are roughly additive across fixtures.
+    expected_points: predicted_points weighted by the chance of playing (FPL's injury news).
+    """
+    fixtures = max(1, int(fixtures_in_gameweek))
+    scaled = fixtures > 1 and double_gameweek_training_rows < MIN_DOUBLE_GAMEWEEK_TRAINING_ROWS
+
+    predicted_points = model_points * fixtures if scaled else model_points
+    expected_points = predicted_points if availability_chance is None else predicted_points * availability_chance
+
+    return {
+        "predicted_points": float(predicted_points),
+        "expected_points": float(expected_points),
+        "double_gameweek_scaled": bool(scaled),
+    }
 
 
 def train_two_stage_model(dataframe):
@@ -66,6 +92,10 @@ def train_two_stage_model(dataframe):
             "rows": int(len(dataframe)),
             "regressor_training_rows": int(len(usable)),
             "trained_through_gameweek": int(dataframe["gameweek"].max()),
+            "double_gameweek_training_rows": (
+                int((dataframe["fixtures_fixturesInGameweek"] > 1).sum())
+                if "fixtures_fixturesInGameweek" in dataframe.columns else 0
+            ),
             "classifier_feature_count": len(classifier_features),
             "regressor_feature_count": len(regressor_features) + 1,
         },

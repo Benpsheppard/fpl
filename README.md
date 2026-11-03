@@ -76,7 +76,18 @@ Use the same `x-api-key` header on every POST. Postman or curl both work.
 4. `POST :8001/model/train` builds the dataset, trains the model and saves it.
 5. `GET :8001/predict/{fplId}` returns the prediction.
 
-After each gameweek, repeat steps 2, 3 and 4. The model does not retrain on its own, so predictions stay on the last trained model until you do. `/predict` says when it is behind (see [Warnings](#warnings)).
+### After each gameweek
+
+```bash
+npm run refresh
+```
+
+This runs steps 1 to 4 in order (syncing bootstrap, fixtures and all players, then training) against the running services,
+reading the API key from `API_KEY` or `server/.env`. It stops at the first step that fails, so a model is never trained
+on a half-finished sync. `--skip-sync` only retrains. Exit code 2 means the model trained but some players failed to sync.
+
+The model does not retrain on its own. Until you refresh, predictions use the last trained model, and `/predict` says so
+(see [Warnings](#warnings)).
 
 ## API
 
@@ -126,10 +137,10 @@ Both `/predict` routes return a `warnings` list, so a prediction never silently 
 
 | Code | Meaning | Fix |
 |---|---|---|
-| `data_stale` | Fixtures show a gameweek with results, but the stored player data stops earlier. | Run the syncs (steps 1 to 3). |
-| `model_stale` | The model was trained on fewer gameweeks than the data now holds. | Retrain (`POST /model/train`). |
+| `data_stale` | Fixtures show a gameweek with results, but the stored player data stops earlier. | Sync (`npm run refresh`). |
+| `model_stale` | The model was trained on fewer gameweeks than the data now holds. | Retrain (`npm run refresh`). |
 
-A stale fixture list cannot be detected this way, so sync the fixtures too. The responses also carry
+A stale fixture list cannot be detected this way, which is why `refresh` syncs fixtures first. The responses also carry
 `data_through_gameweek` and `model_trained_through_gameweek`.
 
 **Double gameweeks.** A player's points for a double gameweek are the sum of both fixtures, and the features include

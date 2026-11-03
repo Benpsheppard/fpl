@@ -7,6 +7,7 @@
     "server": "npm run dev --prefix server",
     "client": "npm run dev --prefix client",
     "python": "cd python && venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001",
+    "refresh": "cd python && venv/bin/python refresh.py",
     "dev": "concurrently \"npm run server\" \"npm run client\""
   },
   "keywords": [],

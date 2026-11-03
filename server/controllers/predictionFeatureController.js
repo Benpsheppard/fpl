@@ -21,6 +21,11 @@ const getPredictionFeatures = asyncHandler(async (req, res) => {
     res.status(200).json(predictionFeatures)
 })
 
+const getAllPredictionFeatures = asyncHandler(async (req, res) => {
+    res.status(200).json(await predictionFeatureService.getAllPredictionFeatures())
+})
+
 module.exports = {
-    getPredictionFeatures
+    getPredictionFeatures,
+    getAllPredictionFeatures
 }

@@ -94,3 +94,22 @@ def test_empty_dataset_is_an_error():
 
     with pytest.raises(DatasetLoadError, match="empty"):
         load_training_dataset(get=get, sleep=no_sleep)
+
+
+from services.dataset_loader import load_all_prediction_features  # noqa: E402
+
+
+def test_all_prediction_features_are_requested_in_one_call():
+    body = {"freshness": {}, "count": 1, "players": [{"playerId": 1}]}
+    get = scripted(FakeResponse(payload=body))
+
+    assert load_all_prediction_features(get=get, sleep=no_sleep) == body
+    assert len(get.calls) == 1
+    assert get.calls[0]["url"].endswith("/api/prediction/all")
+
+
+def test_all_prediction_features_reject_an_unexpected_payload():
+    get = scripted(FakeResponse(payload={"unexpected": True}))
+
+    with pytest.raises(DatasetLoadError, match="unexpected"):
+        load_all_prediction_features(get=get, sleep=no_sleep)

@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+from services import two_stage_model
 from services.dataset_loader import DatasetLoadError, PlayerNotFoundError
 from tests.test_two_stage_model import synthetic_training_data
 from services.two_stage_model import train_two_stage_model
@@ -40,7 +41,7 @@ def test_predict_returns_probability_and_points(monkeypatch):
     bundle = train_two_stage_model(synthetic_training_data())
     monkeypatch.setattr(main, "model_bundle", bundle)
     monkeypatch.setattr(main, "load_prediction_features", lambda player_id: {"playerId": player_id, "context": {"player": {"firstName": "Bukayo", "secondName": "Saka", "webName": "Saka"}}})
-    monkeypatch.setattr(main, "prepare_prediction_dataframe", lambda payloads: synthetic_training_data(seed=3, gameweeks=1, per_gameweek=1).assign(playerId=payloads[0]["playerId"], gameweek=6))
+    monkeypatch.setattr(two_stage_model, "prepare_prediction_dataframe", lambda payloads: synthetic_training_data(seed=3, gameweeks=1, per_gameweek=1).assign(playerId=payloads[0]["playerId"], gameweek=6))
 
     response = client.get("/predict/42")
 
@@ -73,7 +74,7 @@ def test_predict_maps_node_errors(monkeypatch, error, status):
 def test_predict_asks_for_retraining_when_features_changed(monkeypatch):
     monkeypatch.setattr(main, "model_bundle", train_two_stage_model(synthetic_training_data()))
     monkeypatch.setattr(main, "load_prediction_features", lambda player_id: {})
-    monkeypatch.setattr(main, "prepare_prediction_dataframe", lambda payloads: synthetic_training_data(gameweeks=1, per_gameweek=1).drop(columns=["brand_new_feature"]))
+    monkeypatch.setattr(two_stage_model, "prepare_prediction_dataframe", lambda payloads: synthetic_training_data(gameweeks=1, per_gameweek=1).drop(columns=["brand_new_feature"]))
 
     response = client.get("/predict/1")
 
@@ -116,7 +117,7 @@ def test_concurrent_training_is_rejected():
 def test_predict_still_works_when_node_sends_no_name(monkeypatch):
     monkeypatch.setattr(main, "model_bundle", train_two_stage_model(synthetic_training_data()))
     monkeypatch.setattr(main, "load_prediction_features", lambda player_id: {"playerId": player_id})
-    monkeypatch.setattr(main, "prepare_prediction_dataframe", lambda payloads: synthetic_training_data(seed=3, gameweeks=1, per_gameweek=1).assign(playerId=payloads[0]["playerId"], gameweek=6))
+    monkeypatch.setattr(two_stage_model, "prepare_prediction_dataframe", lambda payloads: synthetic_training_data(seed=3, gameweeks=1, per_gameweek=1).assign(playerId=payloads[0]["playerId"], gameweek=6))
 
     body = client.get("/predict/7").json()
 
@@ -149,7 +150,7 @@ def predict_with(monkeypatch, *, fixtures=1, chance=None, status="a", basis="nex
     }
     monkeypatch.setattr(main, "load_prediction_features", lambda player_id: {"playerId": player_id, "context": context})
     monkeypatch.setattr(
-        main, "prepare_prediction_dataframe",
+        two_stage_model, "prepare_prediction_dataframe",
         lambda payloads: synthetic_training_data(seed=3, gameweeks=1, per_gameweek=1).assign(
             playerId=payloads[0]["playerId"], gameweek=6, fixtures_fixturesInGameweek=fixtures
         ),
@@ -222,7 +223,7 @@ def test_predict_works_with_a_model_saved_before_double_gameweek_tracking(monkey
     monkeypatch.setattr(main, "model_bundle", bundle)
     monkeypatch.setattr(main, "load_prediction_features", lambda player_id: {"playerId": player_id})
     monkeypatch.setattr(
-        main, "prepare_prediction_dataframe",
+        two_stage_model, "prepare_prediction_dataframe",
         lambda payloads: synthetic_training_data(seed=3, gameweeks=1, per_gameweek=1).assign(
             playerId=payloads[0]["playerId"], gameweek=6, fixtures_fixturesInGameweek=2
         ),

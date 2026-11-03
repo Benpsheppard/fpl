@@ -155,22 +155,25 @@ const calculateFixtureLookahead = (playerTeamId, upcomingFixtures, now) => {
     }
 }
 
-const getPredictionFeatures = async (playerId) => {
-    const player = await Player.findOne({ fplId: playerId, removed: false }).lean()
-    if (!player) {
-        return null
-    }
+// Where the stored data stops, so callers can tell when a sync or retrain is overdue
+const getFreshness = (dataThroughGameweek, fixtures) => {
+    const finishedGameweeks = fixtures
+        .filter((fixture) => fixture.finished && fixture.gameweek)
+        .map((fixture) => fixture.gameweek)
 
-    const [ playerGameweeks, seasons, fixtures ] = await Promise.all([
-        PlayerGameweek.find({ playerId: playerId }).sort({ gameweek: 1 }).lean(),
-        PlayerSeason.find({ playerId: playerId }).lean(),
-        Fixture.find().lean()
-    ])
+    return {
+        dataThroughGameweek: dataThroughGameweek ?? null,
+        latestFinishedFixtureGameweek: finishedGameweeks.length > 0 ? Math.max(...finishedGameweeks) : null
+    }
+}
+
+// One player's features for their next fixture, built from data the caller has already loaded.
+// Returns null when there is no history or no upcoming fixture.
+const buildPredictionPayload = ({ player, playerGameweeks, seasons, fixtures, fixtureById, freshness, now }) => {
     if (playerGameweeks.length === 0) {
         return null
     }
 
-    const now = new Date()
     const upcomingFixtures = getUpcomingFixtures(fixtures, player.team, now)
     const nextFixture = upcomingFixtures[0]
     if (!nextFixture) {
@@ -191,11 +194,11 @@ const getPredictionFeatures = async (playerId) => {
         previousGameweeks: playerGameweeks.filter((gameweek) => gameweek.gameweek < nextFixture.gameweek),
         seasons,
         fixtures,
-        fixtureById: new Map(fixtures.map((fixture) => [ fixture.fplId, fixture ]))
+        fixtureById
     })
 
     return {
-        playerId,
+        playerId: player.fplId,
         gameweek: nextFixture.gameweek,
 
         features,
@@ -205,9 +208,14 @@ const getPredictionFeatures = async (playerId) => {
             player: {
                 firstName: player.firstName,
                 secondName: player.secondName,
-                webName: player.webName
+                webName: player.webName,
+                team: player.team,
+                elementType: player.elementType,
+                // FPL stores price in tenths of a million
+                price: player.nowCost === undefined || player.nowCost === null ? null : player.nowCost / 10
             },
             availability: getAvailability(player, fixtures, nextFixture.gameweek),
+            freshness,
             status: player.status,
             chanceOfPlayingThisRound: player.chanceOfPlayingThisRound,
             chanceOfPlayingNextRound: player.chanceOfPlayingNextRound,
@@ -216,6 +224,75 @@ const getPredictionFeatures = async (playerId) => {
     }
 }
 
+const getPredictionFeatures = async (playerId) => {
+    const player = await Player.findOne({ fplId: playerId, removed: false }).lean()
+    if (!player) {
+        return null
+    }
+
+    const [ playerGameweeks, seasons, fixtures, latestRow ] = await Promise.all([
+        PlayerGameweek.find({ playerId: playerId }).sort({ gameweek: 1 }).lean(),
+        PlayerSeason.find({ playerId: playerId }).lean(),
+        Fixture.find().lean(),
+        // League-wide, not this player's last row, so a blank gameweek is not mistaken for stale data
+        PlayerGameweek.findOne().sort({ gameweek: -1 }).select("gameweek").lean()
+    ])
+
+    return buildPredictionPayload({
+        player,
+        playerGameweeks,
+        seasons,
+        fixtures,
+        fixtureById: new Map(fixtures.map((fixture) => [ fixture.fplId, fixture ])),
+        freshness: getFreshness(latestRow?.gameweek, fixtures),
+        now: new Date()
+    })
+}
+
+// Every active player's features in one pass, loading the collections once instead of per player
+const getAllPredictionFeatures = async () => {
+    const [ players, gameweeks, seasons, fixtures ] = await Promise.all([
+        Player.find({ removed: false }).lean(),
+        PlayerGameweek.find().sort({ gameweek: 1 }).lean(),
+        PlayerSeason.find().lean(),
+        Fixture.find().lean()
+    ])
+
+    const groupByPlayer = (rows) => {
+        const grouped = new Map()
+        for (const row of rows) {
+            if (!grouped.has(row.playerId)) {
+                grouped.set(row.playerId, [])
+            }
+            grouped.get(row.playerId).push(row)
+        }
+        return grouped
+    }
+
+    const gameweeksByPlayer = groupByPlayer(gameweeks)
+    const seasonsByPlayer = groupByPlayer(seasons)
+    const fixtureById = new Map(fixtures.map((fixture) => [ fixture.fplId, fixture ]))
+    // The maximum, not the last row: this must not depend on how the rows happen to be ordered
+    const latestGameweek = gameweeks.reduce((latest, row) => Math.max(latest, row.gameweek), 0) || null
+    const freshness = getFreshness(latestGameweek, fixtures)
+    const now = new Date()
+
+    const payloads = players
+        .map((player) => buildPredictionPayload({
+            player,
+            playerGameweeks: gameweeksByPlayer.get(player.fplId) || [],
+            seasons: seasonsByPlayer.get(player.fplId) || [],
+            fixtures,
+            fixtureById,
+            freshness,
+            now
+        }))
+        .filter(Boolean)
+
+    return { freshness, count: payloads.length, players: payloads }
+}
+
 module.exports = {
-    getPredictionFeatures
+    getPredictionFeatures,
+    getAllPredictionFeatures
 }

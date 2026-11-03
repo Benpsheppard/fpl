@@ -6,22 +6,22 @@ import hmac
 import os
 import threading
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 import pandas as pd
 
 # Services
 from services.dataset_loader import (
     load_training_dataset,
     load_prediction_features,
+    load_all_prediction_features,
     DatasetLoadError,
     PlayerNotFoundError
 )
 from services.model_comparison import compare_models, json_safe
 from services.two_stage_model import (
-    adjust_prediction,
+    predict_payloads,
+    staleness_warnings,
     train_two_stage_model,
-    predict_two_stage,
-    prepare_prediction_dataframe,
     save_model,
     load_model,
     ModelNotTrainedError
@@ -262,6 +262,14 @@ def train_model():
 def model_info():
     return get_model()["metadata"]
 
+def prediction_errors(action):
+    """Run a prediction step, turning a model/data mismatch into a 409 that says what to do."""
+    try:
+        return action()
+    except (ValueError, KeyError) as error:
+        # Feature columns changed since the model was trained, or Node and Python disagree on the schema
+        raise HTTPException(status_code=409, detail=f"{error}. Retrain the model, and restart Node if it was updated.")
+
 @app.get("/predict/{player_id}")
 def predict(player_id: int):
     bundle = get_model()
@@ -273,53 +281,56 @@ def predict(player_id: int):
     except DatasetLoadError as error:
         raise HTTPException(status_code=502, detail=str(error))
 
-    try:
-        prediction_frame = prepare_prediction_dataframe([payload])
-        result = predict_two_stage(bundle, prediction_frame).iloc[0]
-        features_row = prediction_frame.iloc[0]
-    except ValueError as error:
-        # Feature columns changed since the model was trained
-        raise HTTPException(status_code=409, detail=f"{error}. Retrain the model.")
-
-    context = payload.get("context") or {}
-    name = context.get("player") or {}
-    availability = context.get("availability") or {}
-    chance = availability.get("chance")
-    fixtures_in_gameweek = int(features_row.get("fixtures_fixturesInGameweek", 1))
-    double_gameweek_rows = bundle["metadata"].get("double_gameweek_training_rows", 0)
-
-    adjusted = adjust_prediction(float(result["predicted_points"]), fixtures_in_gameweek, double_gameweek_rows, chance)
-    appearance_probability = float(result["appearance_probability"])
+    prediction = prediction_errors(lambda: predict_payloads(bundle, [payload])[0])
+    freshness = (payload.get("context") or {}).get("freshness") or {}
 
     return {
-        "playerId": int(result["playerId"]),
-        "name": name.get("webName"),
-        "fullName": " ".join(part for part in (name.get("firstName"), name.get("secondName")) if part) or None,
-        "gameweek": int(result["gameweek"]),
-
-        # What to rank by: the model's figure, adjusted for a double gameweek and for injury news
-        "expected_points": adjusted["expected_points"],
-        "predicted_points": adjusted["predicted_points"],
-        "model_points": float(result["predicted_points"]),
-
-        "appearance_probability": appearance_probability,
-        "adjusted_appearance_probability": appearance_probability if chance is None else appearance_probability * chance,
-
-        "fixtures_in_gameweek": fixtures_in_gameweek,
-        "adjustments": {
-            "double_gameweek": {
-                "fixtures": fixtures_in_gameweek,
-                "scaled_by_fixture_count": adjusted["double_gameweek_scaled"],
-                "model_training_rows": double_gameweek_rows,
-            },
-            "availability": {
-                "status": availability.get("status"),
-                "chance": chance,
-                "basis": availability.get("basis", "none"),
-                "source": availability.get("source", "none"),
-            },
-        },
+        **prediction,
         "model_trained_through_gameweek": bundle["metadata"]["trained_through_gameweek"],
+        "data_through_gameweek": freshness.get("dataThroughGameweek"),
+        "warnings": staleness_warnings(bundle["metadata"], freshness),
+    }
+
+@app.get("/predict")
+def predict_all(
+    position: int | None = Query(default=None, ge=1, le=4, description="1 GK, 2 DEF, 3 MID, 4 FWD"),
+    team: int | None = Query(default=None, ge=1),
+    max_price: float | None = Query(default=None, gt=0, description="In millions, e.g. 7.5"),
+    limit: int = Query(default=50, ge=1, le=1000),
+):
+    """Every active player's next-fixture prediction, best expected points first."""
+    bundle = get_model()
+
+    try:
+        data = load_all_prediction_features()
+    except DatasetLoadError as error:
+        raise HTTPException(status_code=502, detail=str(error))
+
+    def wanted(payload):
+        player = (payload.get("context") or {}).get("player") or {}
+        price = player.get("price")
+
+        return (
+            (position is None or player.get("elementType") == position)
+            and (team is None or player.get("team") == team)
+            # A player with no known price can't be said to fit a budget
+            and (max_price is None or (price is not None and price <= max_price))
+        )
+
+    payloads = [payload for payload in data["players"] if wanted(payload)]
+    predictions = prediction_errors(lambda: predict_payloads(bundle, payloads))
+
+    predictions.sort(key=lambda p: (p["expected_points"], p["predicted_points"]), reverse=True)
+
+    freshness = data.get("freshness") or {}
+
+    return {
+        "count": len(predictions),
+        "returned": min(limit, len(predictions)),
+        "model_trained_through_gameweek": bundle["metadata"]["trained_through_gameweek"],
+        "data_through_gameweek": freshness.get("dataThroughGameweek"),
+        "warnings": staleness_warnings(bundle["metadata"], freshness),
+        "players": predictions[:limit],
     }
 
 

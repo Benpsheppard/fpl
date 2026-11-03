@@ -150,3 +150,97 @@ def predict_two_stage(bundle, dataframe):
         "appearance_probability": probabilities,
         "predicted_points": points,
     })
+
+
+def staleness_warnings(metadata, freshness):
+    """Say so when the data or the model is behind, instead of predicting quietly from old information.
+
+    freshness comes from the Node service: the last gameweek with stored player data, and the last
+    gameweek with a finished fixture. A stale fixture list can't be detected from here.
+    """
+    freshness = freshness or {}
+    data_through = freshness.get("dataThroughGameweek")
+    latest_finished = freshness.get("latestFinishedFixtureGameweek")
+    trained_through = metadata.get("trained_through_gameweek")
+
+    warnings = []
+
+    if data_through is not None and latest_finished is not None and latest_finished > data_through:
+        warnings.append({
+            "code": "data_stale",
+            "message": (
+                f"Fixtures show gameweek {latest_finished} has results, but player data only goes to "
+                f"gameweek {data_through}. Run a sync."
+            ),
+        })
+
+    if data_through is not None and trained_through is not None and trained_through < data_through:
+        warnings.append({
+            "code": "model_stale",
+            "message": (
+                f"The model was trained through gameweek {trained_through}, but player data goes to "
+                f"gameweek {data_through}. Retrain the model."
+            ),
+        })
+
+    return warnings
+
+
+def build_prediction(bundle, payload, features_row, result):
+    """One player's response: the model's figure, then each adjustment applied to it."""
+    context = payload.get("context") or {}
+    name = context.get("player") or {}
+    availability = context.get("availability") or {}
+    chance = availability.get("chance")
+    fixtures_in_gameweek = int(features_row.get("fixtures_fixturesInGameweek", 1))
+    double_gameweek_rows = bundle["metadata"].get("double_gameweek_training_rows", 0)
+
+    adjusted = adjust_prediction(float(result["predicted_points"]), fixtures_in_gameweek, double_gameweek_rows, chance)
+    appearance_probability = float(result["appearance_probability"])
+
+    return {
+        "playerId": int(result["playerId"]),
+        "name": name.get("webName"),
+        "fullName": " ".join(part for part in (name.get("firstName"), name.get("secondName")) if part) or None,
+        "team": name.get("team"),
+        "position": name.get("elementType"),
+        "price": name.get("price"),
+        "gameweek": int(result["gameweek"]),
+
+        # What to rank by: the model's figure, adjusted for a double gameweek and for injury news
+        "expected_points": adjusted["expected_points"],
+        "predicted_points": adjusted["predicted_points"],
+        "model_points": float(result["predicted_points"]),
+
+        "appearance_probability": appearance_probability,
+        "adjusted_appearance_probability": appearance_probability if chance is None else appearance_probability * chance,
+
+        "fixtures_in_gameweek": fixtures_in_gameweek,
+        "adjustments": {
+            "double_gameweek": {
+                "fixtures": fixtures_in_gameweek,
+                "scaled_by_fixture_count": adjusted["double_gameweek_scaled"],
+                "model_training_rows": double_gameweek_rows,
+            },
+            "availability": {
+                "status": availability.get("status"),
+                "chance": chance,
+                "basis": availability.get("basis", "none"),
+                "source": availability.get("source", "none"),
+            },
+        },
+    }
+
+
+def predict_payloads(bundle, payloads):
+    """Predict many players with one pass through the model."""
+    if not payloads:
+        return []
+
+    frame = prepare_prediction_dataframe(payloads)
+    results = predict_two_stage(bundle, frame)
+
+    return [
+        build_prediction(bundle, payloads[i], frame.iloc[i], results.iloc[i])
+        for i in range(len(payloads))
+    ]

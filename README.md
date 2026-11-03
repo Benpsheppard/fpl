@@ -76,7 +76,7 @@ Use the same `x-api-key` header on every POST. Postman or curl both work.
 4. `POST :8001/model/train` builds the dataset, trains the model and saves it.
 5. `GET :8001/predict/{fplId}` returns the prediction.
 
-After each gameweek, repeat steps 2, 3 and 4. The model does not retrain on its own, so predictions stay on the last trained model until you do.
+After each gameweek, repeat steps 2, 3 and 4. The model does not retrain on its own, so predictions stay on the last trained model until you do. `/predict` says when it is behind (see [Warnings](#warnings)).
 
 ## API
 
@@ -87,6 +87,7 @@ After each gameweek, repeat steps 2, 3 and 4. The model does not retrain on its 
 | `POST /model/train` | Train and save the two-stage model. Needs the API key. |
 | `GET /model` | Summary of the current model: rows, latest gameweek trained on. |
 | `GET /predict/{player_id}` | Prediction for the player's next fixture. See [Reading a prediction](#reading-a-prediction). |
+| `GET /predict` | Every active player, best `expected_points` first. Filters: `position` (1 GK, 2 DEF, 3 MID, 4 FWD), `team`, `max_price` (in millions), `limit` (default 50). |
 | `GET /dataset/test/compare` | Single-stage vs two-stage on identical validation players, with a paired significance check. |
 | `GET /dataset/test*` | Other validation experiments (single split, rolling, two-stage). Slow; they log metrics. |
 
@@ -100,6 +101,7 @@ features changed since training (retrain).
 | `GET /api/training/dataset?maxGameweek=N` | Training rows. Cached until the next sync. |
 | `GET /api/training/:playerId/:gameweek` | One training row. |
 | `GET /api/prediction?playerId=N` | Features for the player's next fixture. |
+| `GET /api/prediction/all` | The same for every active player, loading the data once. |
 | `GET /api/players`, `/api/players/:playerId[/gameweeks\|seasons\|fixtures\|analysis]` | Stored player data. |
 | `GET /api/fpl/...` | Proxies for the FPL API (bootstrap, fixtures, managers, player history). |
 | `POST /api/fpl/sync-*` | Sync into MongoDB. Need the API key. `sync-all-players` is the one to use. |
@@ -117,6 +119,18 @@ Reads are limited to 300 requests a minute and writes to 10. Ids must be plain i
 | `expected_points` | `predicted_points` weighted by the player's chance of playing. **Rank players by this.** |
 | `appearance_probability` | Stage 1's chance the player plays at all. `adjusted_appearance_probability` weights it by availability. |
 | `adjustments` | Exactly what was applied: the fixture count, whether it was scaled, and the availability status, chance, basis and source. |
+
+### Warnings
+
+Both `/predict` routes return a `warnings` list, so a prediction never silently rests on old information:
+
+| Code | Meaning | Fix |
+|---|---|---|
+| `data_stale` | Fixtures show a gameweek with results, but the stored player data stops earlier. | Run the syncs (steps 1 to 3). |
+| `model_stale` | The model was trained on fewer gameweeks than the data now holds. | Retrain (`POST /model/train`). |
+
+A stale fixture list cannot be detected this way, so sync the fixtures too. The responses also carry
+`data_through_gameweek` and `model_trained_through_gameweek`.
 
 **Double gameweeks.** A player's points for a double gameweek are the sum of both fixtures, and the features include
 `fixturesInGameweek` and the second fixture's side and difficulty. But the model can only learn the effect from double

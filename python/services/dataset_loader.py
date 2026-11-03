@@ -89,3 +89,13 @@ def load_prediction_features(player_id, get=requests.get, sleep=time.sleep):
         raise DatasetLoadError("Node API returned an unexpected prediction payload")
 
     return data
+
+
+def load_all_prediction_features(get=requests.get, sleep=time.sleep):
+    """Features for every active player's next fixture, in one request."""
+    data = _get_json("/api/prediction/all", {}, get, sleep)
+
+    if not isinstance(data, dict) or not isinstance(data.get("players"), list):
+        raise DatasetLoadError("Node API returned an unexpected prediction payload")
+
+    return data

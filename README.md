@@ -173,9 +173,15 @@ The main risk is leakage: a feature that uses information from the gameweek bein
 ## Tests
 
 ```bash
-cd server && npm test                              # Node, no database needed
-cd python && venv/bin/python -m pytest             # Python
+npm test                                           # both suites, from the repo root
+npm run test:server                                # Node only, no database needed
+npm run test:python                                # Python only
 ```
+
+[GitHub Actions](.github/workflows/ci.yml) runs both suites on every push and pull request, in parallel, from a clean
+checkout using the lockfile (`npm ci`) and the pinned `requirements-dev.txt`. Neither needs MongoDB, the FPL API or
+any secrets. If CI fails but your machine passes, the usual cause is a dependency installed locally but missing from
+those files.
 
 The Node prediction payload is checked against
 [python/tests/fixtures/prediction_payload.json](python/tests/fixtures/prediction_payload.json), which the Python tests flatten.

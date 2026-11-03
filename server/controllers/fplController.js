@@ -114,7 +114,12 @@ const getPlayerGameweek = asyncHandler(async (req, res) => {
  */
 const getAllPlayersGameweek = asyncHandler(async (req, res) => {
     try {
-        const limit = req.body.limit || 10
+        const limit = req.query.limit === undefined ? 10 : Number(req.query.limit)
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+            res.status(400).json({ message: "limit must be an integer from 1 to 100" })
+            return
+        }
+
         const data = await fplService.getAllPlayersGameweek(limit)
         res.status(200).json(data)
     } catch (error) {

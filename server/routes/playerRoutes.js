@@ -5,6 +5,9 @@ const express = require('express')
 
 const playerRouter = express.Router()
 
+const { validateCommonParams } = require('../middleware/validateParams')
+validateCommonParams(playerRouter)
+
 const { getPlayers, getPlayer, getPlayerGameweeks, getPlayerSeasons, getPlayerFixtures, getPlayerAnalysis } = require('../controllers/playerController')
 
 // Routes

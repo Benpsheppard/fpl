@@ -5,6 +5,9 @@ const express = require('express')
 
 const fplRouter = express.Router()
 
+const { validateCommonParams } = require('../middleware/validateParams')
+validateCommonParams(fplRouter)
+
 const { 
     getBootstrap, getFixtures, getManager, getManagerGameweek, 
     getManagerSquad, getPlayerGameweek, getAllPlayersGameweek,

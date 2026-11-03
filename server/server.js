@@ -2,35 +2,20 @@
 
 // Imports
 require('dotenv').config()
-const express = require('express')
-const connectDB = require('./config/db.js')                       
-
-// Routers
-const { fplRouter } = require("./routes/fplRoutes")     
-const { playerRouter } = require('./routes/playerRoutes.js')
-const { predictionFeatureRouter } = require('./routes/predictionFeatureRoutes.js')
-const { trainingDatasetRouter } = require('./routes/trainingDatasetRoutes.js')
+const connectDB = require('./config/db.js')
+const { createApp } = require('./app')
 
 // Variables
-const port = process.env.PORT || 5050
+const port = process.env.PORT || 8000
+// Local only unless HOST says otherwise
+const host = process.env.HOST || '127.0.0.1'
 
-// Connect to database
-connectDB()
+const start = async () => {
+    await connectDB()
 
-// App
-const app = express()
+    createApp().listen(port, host, () => {
+        console.log(`Server running on http://${host}:${port}`)
+    })
+}
 
-// Middleware
-app.use(express.json())
-app.use(express.urlencoded())
-
-// Routes
-app.use("/api/fpl", fplRouter)
-app.use("/api/players", playerRouter)
-app.use("/api/prediction", predictionFeatureRouter)
-app.use("/api/training", trainingDatasetRouter)
-
-// Port listener
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`)
-})
+start()

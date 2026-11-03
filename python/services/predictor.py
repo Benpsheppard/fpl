@@ -2,57 +2,20 @@
 
 # Imports
 import numpy as np
-from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor, ExtraTreesRegressor, RandomForestClassifier
-from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score, roc_auc_score, classification_report
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.metrics import (
+    mean_absolute_error, root_mean_squared_error, 
+    r2_score, roc_auc_score, accuracy_score, 
+    precision_score, recall_score, brier_score_loss
+)
 from xgboost import XGBRegressor
-from catboost import CatBoostRegressor
 
 ### Regression Models ###
 
-def train_baseline_model(X_train, y_train):
-    model = HistGradientBoostingRegressor(
-        loss="absolute_error",
-        max_iter=500,
-        learning_rate=0.05,
-        max_leaf_nodes = 31,
-        min_samples_leaf = 20,
-        l2_regularization = 1.0,
-        random_state = 42
-    )
-
-    model.fit(X_train, y_train)
-
-    return model
-
-def train_random_forest_model_log(X_train, y_train):
-    model = RandomForestRegressor(
-        n_estimators = 500,
-        max_features = "sqrt",
-        min_samples_leaf = 2,
-        random_state = 42,
-        n_jobs = -1
-    )
-
-    # log1p requires target >= 0
-    valid_mask = y_train >= 0
-
-    X_train_clean = X_train.loc[valid_mask]
-    y_train_clean = y_train.loc[valid_mask]
-
-    print(f"Remoed {(~valid_mask).sum()} negative target rows")
-    print(f"Training rows: {len(y_train_clean)}")
-
-    # Transform target before training
-    y_train_log = np.log1p(y_train_clean)
-
-    model.fit(X_train_clean, y_train_log)
-
-    return model
-
 def train_random_forest_model(X_train, y_train):
     model = RandomForestRegressor(
-        n_estimators = 500,
+        n_estimators = 100,
         max_features = "sqrt",
         min_samples_leaf = 4,
         random_state = 42,
@@ -74,33 +37,6 @@ def train_xgboost_model(X_train, y_train):
         objective="reg:squarederror",
         random_state = 42,
         n_jobs = -1
-    )
-
-    model.fit(X_train, y_train)
-
-    return model
-
-def train_extra_trees_model(X_train, y_train):
-    model = ExtraTreesRegressor(
-        n_estimators = 500,
-        max_features = "sqrt",
-        min_samples_leaf = 2,
-        random_state = 42,
-        n_jobs = -1
-    )
-
-    model.fit(X_train, y_train)
-
-    return model
-
-def train_catboost_model(X_train, y_train):
-    model = CatBoostRegressor(
-        iterations = 500,
-        depth = 6,
-        learning_rate = 0.05,
-        loss_function = "RMSE",
-        random_seed = 42,
-        verbose = False
     )
 
     model.fit(X_train, y_train)
@@ -135,11 +71,11 @@ def evaluate_predictions(y_actual, predictions):
 
 ### Classification Models ###
 
-def train_classifier(X_train, y_train):
+def train_random_forest_classifier(X_train, y_train):
     model = RandomForestClassifier(
         n_estimators = 500,
         max_features = "sqrt",
-        min_samples_leaf = 2,
+        min_samples_leaf = 4,
         random_state = 42,
         n_jobs = -1
     )
@@ -148,50 +84,67 @@ def train_classifier(X_train, y_train):
 
     return model
 
-def create_oof_haul_probabilities(X_train, y_train):
-    probabilities = np.zeros(len(X_train))
-
-    cv = StratifiedKFold(
-        n_splits = 5,
-        shuffle = True,
-        random_state = 42
-    )
-
-    for train_indices, validation_indices in cv.split(X_train, y_train):
-        X_fold_train = X_train.iloc[train_indices]
-        y_fold_train = y_train.iloc[train_indices]
-
-        X_fold_validation = X_train.iloc[validation_indices]
-
-        model = RandomForestClassifier(
-            n_estimators = 500,
-            max_features = "sqrt",
-            min_samples_leaf = 2,
-            random_state = 42,
-            n_jobs = -1
-        )
-
-        model.fit(X_fold_train, y_fold_train)
-
-        probabilities[validation_indices] = (model.predict_proba(X_fold_validation)[:, 1])
-
-        return probabilities
-
-def evaluate_classifier_model(model, X_validation, y_validation):
+def evaluate_appearance_classifier(model, X_validation, y_validation):
     probabilities = model.predict_proba(X_validation)[:, 1]
-
     predictions = (probabilities >= 0.5).astype(int)
 
-    roc_auc = roc_auc_score(y_validation, probabilities)
-    report = classification_report(y_validation, predictions, output_dict = True)
-
-    print("\n=== CLASSIFICATION MODEL RESULTS ===")
-    print("ROC AUC: ", roc_auc)
-    print("Report: ", report)
-
-    return {
-        "roc_auc": roc_auc,
-        "probabilities": probabilities,
-        "predictions": predictions,
-        "report": report
+    results = {
+        "accuracy": accuracy_score(y_validation, predictions),
+        "precision": precision_score(
+            y_validation, predictions, zero_division=0
+        ),
+        "recall": recall_score(
+            y_validation, predictions, zero_division=0
+        ),
+        "brier": brier_score_loss(y_validation, probabilities),
+        "actual_appearance_rate": float(np.mean(y_validation)),
+        "predicted_appearance_rate": float(np.mean(probabilities)),
     }
+
+    if len(np.unique(y_validation)) == 2:
+        results["roc_auc"] = roc_auc_score(
+            y_validation, probabilities
+        )
+    else:
+        results["roc_auc"] = None
+
+    print("\n=== APPEARANCE CLASSIFIER RESULTS ===")
+
+    for metric, value in results.items():
+        if value is not None:
+            print(f"{metric}: {value:.4f}")
+
+    return results
+
+def generate_oof_appearance_probabilities(train_df, feature_columns):
+    probabilities = pd.Series(np.nan, index=train_df.index, dtype=float)
+
+    gameweeks = sorted(train_df["gameweek"].dropna().unique())
+
+    for gameweek in gameweeks:
+        earlier_rows = train_df[train_df["gameweek"] < gameweek]
+        current_rows = train_df[train_df["gameweek"] == gameweek]
+
+        if earlier_rows.empty or current_rows.empty:
+            continue
+
+        y_earlier = (
+            earlier_rows["target_totalMinutes"] > 0
+        ).astype(int)
+
+        # A classifier needs examples from both classes.
+        if y_earlier.nunique() < 2:
+            continue
+
+        classifier = train_random_forest_classifier(
+            earlier_rows[feature_columns],
+            y_earlier
+        )
+
+        probabilities.loc[current_rows.index] = (
+            classifier.predict_proba(
+                current_rows[feature_columns]
+            )[:, 1]
+        )
+
+    return probabilities

@@ -1,6 +1,7 @@
 # predictor.py
 
 # Imports
+import logging
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
@@ -10,6 +11,8 @@ from sklearn.metrics import (
     precision_score, recall_score, brier_score_loss
 )
 from xgboost import XGBRegressor
+
+logger = logging.getLogger(__name__)
 
 ### Regression Models ###
 
@@ -50,10 +53,10 @@ def evaluate_model(model, X_validation, y_validation):
     rmse = root_mean_squared_error(y_validation, predictions)
     r2 = r2_score(y_validation, predictions)
 
-    print("\n=== MODEL RESULTS ===")
-    print(f"MAE: {mae:.4f}")
-    print(f"RMSE: {rmse:.4f}")
-    print(f"R2: {r2:.4f}")
+    logger.info("\n=== MODEL RESULTS ===")
+    logger.info(f"MAE: {mae:.4f}")
+    logger.info(f"RMSE: {rmse:.4f}")
+    logger.info(f"R2: {r2:.4f}")
 
     return {
         "mae": mae,
@@ -108,11 +111,11 @@ def evaluate_appearance_classifier(model, X_validation, y_validation):
     else:
         results["roc_auc"] = None
 
-    print("\n=== APPEARANCE CLASSIFIER RESULTS ===")
+    logger.info("\n=== APPEARANCE CLASSIFIER RESULTS ===")
 
     for metric, value in results.items():
         if value is not None:
-            print(f"{metric}: {value:.4f}")
+            logger.info(f"{metric}: {value:.4f}")
 
     return results
 

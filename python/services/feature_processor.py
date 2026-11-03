@@ -1,11 +1,14 @@
 # feature_processor.py
 
 # imports
+import logging
 import pandas as pd
 import numpy as np
 
 from services.predictor import (train_random_forest_model, train_random_forest_classifier, evaluate_model, generate_oof_appearance_probabilities)
 from services.diagnostics import (inspect_model_data)
+
+logger = logging.getLogger(__name__)
 
 ### Feature Prep
 
@@ -578,22 +581,22 @@ def run_rolling_validation(dataframe, start_gameweek=5, end_gameweek=None):
     results = []
 
     for validation_gameweek in range(start_gameweek, end_gameweek + 1):
-        print(f"\n=== VALIDATION GAMEWEEK {validation_gameweek} ===")
+        logger.info(f"\n=== VALIDATION GAMEWEEK {validation_gameweek} ===")
 
         (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data(dataframe, validation_gameweek)
 
         if len(X_train) == 0 or len(X_validation) == 0:
-            print("Skipping - insufficient data")
+            logger.info("Skipping - insufficient data")
             continue
         
         model = train_random_forest_model(X_train, y_train)
         model_results = evaluate_model(model, X_validation, y_validation)
 
-        print(f"Train rows: {len(X_train)}")
-        print(f"Validation rows: {len(X_validation)}")
-        print(f"MAE: {model_results['mae']:.4f}")
-        print(f"RMSE: {model_results['rmse']:.4f}")
-        print(f"R2: {model_results['r2']:.4f}")
+        logger.info(f"Train rows: {len(X_train)}")
+        logger.info(f"Validation rows: {len(X_validation)}")
+        logger.info(f"MAE: {model_results['mae']:.4f}")
+        logger.info(f"RMSE: {model_results['rmse']:.4f}")
+        logger.info(f"R2: {model_results['r2']:.4f}")
 
         results.append({
             "gameweek": validation_gameweek,
@@ -606,26 +609,26 @@ def run_rolling_validation(dataframe, start_gameweek=5, end_gameweek=None):
 
     results_dataframe = pd.DataFrame(results)
 
-    print("\n=== ROLLING VALIDATION SUMMARY ===")
+    logger.info("\n=== ROLLING VALIDATION SUMMARY ===")
 
-    print(
+    logger.info(
         f"Average MAE: "
         f"{results_dataframe['mae'].mean():.4f}"
     )
 
-    print(
+    logger.info(
         f"Average RMSE: "
         f"{results_dataframe['rmse'].mean():.4f}"
     )
 
-    print(
+    logger.info(
         f"Average R2: "
         f"{results_dataframe['r2'].mean():.4f}"
     )
 
-    print("\n=== RESULTS BY GAMEWEEK ===")
+    logger.info("\n=== RESULTS BY GAMEWEEK ===")
 
-    print(results_dataframe.to_string(index=False))
+    logger.info(results_dataframe.to_string(index=False))
 
     return results_dataframe
 
@@ -638,7 +641,7 @@ def run_rolling_two_stage_validation(dataframe, start_gameweek=2, end_gameweek=N
     results = []
 
     for validation_gameweek in range(start_gameweek, end_gameweek + 1):
-        print(f"\n=== TWO-STAGE VALIDATION GW" f"{validation_gameweek} ===")
+        logger.info(f"\n=== TWO-STAGE VALIDATION GW" f"{validation_gameweek} ===")
 
         # STAGE 1: Appearance classifier
         (X_classifier_train, y_classifier_train, X_classifier_validation, y_classifier_validation, classifier_features, oof_probabilities) = prepare_classifier_model_data(dataframe, validation_gameweek)
@@ -652,7 +655,7 @@ def run_rolling_two_stage_validation(dataframe, start_gameweek=2, end_gameweek=N
             or X_train.empty
             or X_validation.empty
         ):
-            print("Skipping: insufficient data")
+            logger.info("Skipping: insufficient data")
             continue
 
         # Prevent target leakage
@@ -711,7 +714,7 @@ def run_rolling_two_stage_validation(dataframe, start_gameweek=2, end_gameweek=N
             )
 
         if X_train.empty:
-            print("Skipping: no OOF training rows")
+            logger.info("Skipping: no OOF training rows")
             continue
 
         # Verify both stages cover the same validation rows
@@ -735,12 +738,12 @@ def run_rolling_two_stage_validation(dataframe, start_gameweek=2, end_gameweek=N
             y_validation
         )
 
-        print(f"Training rows: {len(X_train)}")
-        print(f"Validation rows: {len(X_validation)}")
-        print(f"Features: {len(X_train.columns)}")
-        print(f"MAE: {model_results['mae']:.4f}")
-        print(f"RMSE: {model_results['rmse']:.4f}")
-        print(f"R2: {model_results['r2']:.4f}")
+        logger.info(f"Training rows: {len(X_train)}")
+        logger.info(f"Validation rows: {len(X_validation)}")
+        logger.info(f"Features: {len(X_train.columns)}")
+        logger.info(f"MAE: {model_results['mae']:.4f}")
+        logger.info(f"RMSE: {model_results['rmse']:.4f}")
+        logger.info(f"R2: {model_results['r2']:.4f}")
 
         results.append({
             "gameweek": validation_gameweek,
@@ -754,20 +757,20 @@ def run_rolling_two_stage_validation(dataframe, start_gameweek=2, end_gameweek=N
 
     results_dataframe = pd.DataFrame(results)
 
-    print("\n=== TWO-STAGE ROLLING SUMMARY ===")
+    logger.info("\n=== TWO-STAGE ROLLING SUMMARY ===")
 
     if not results_dataframe.empty:
-        print(results_dataframe.to_string(index=False))
-        print(
-            "Average MAE:",
+        logger.info(results_dataframe.to_string(index=False))
+        logger.info(
+            "Average MAE: %s",
             results_dataframe["mae"].mean()
         )
-        print(
-            "Average RMSE:",
+        logger.info(
+            "Average RMSE: %s",
             results_dataframe["rmse"].mean()
         )
-        print(
-            "Average R2:",
+        logger.info(
+            "Average R2: %s",
             results_dataframe["r2"].mean()
         )
 

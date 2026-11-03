@@ -1,10 +1,13 @@
 # dataset_loader.py
 
 # imports
+import logging
 import os
 import time
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 NODE_API_URL = os.getenv("NODE_API_URL", "http://localhost:8000")
 
@@ -72,8 +75,8 @@ def load_training_dataset(max_gameweek=None, get=requests.get, sleep=time.sleep)
             "Node API returned an empty training dataset. Has the data been synced?"
         )
 
-    print("Rows reported by Node: ", data.get("rows"))
-    print("Rows received by Python: ", len(dataset))
+    logger.info("Rows reported by Node: %s", data.get("rows"))
+    logger.info("Rows received by Python: %s", len(dataset))
 
     return dataset
 

@@ -1,6 +1,7 @@
 # main.py
 
 # Imports
+import logging
 import hmac
 import os
 import threading
@@ -43,6 +44,11 @@ from services.diagnostics import (
     inspect_row
 )
 
+logger = logging.getLogger(__name__)
+
+# Show INFO logs (model diagnostics, dataset sizes) in the console
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s - %(message)s")
+
 # App initialisation
 app = FastAPI(
     title="FPL Prediciton API",
@@ -71,7 +77,7 @@ def test_dataset():
     (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data(dataframe)
 
     # Random Forest Model
-    print("\n=== RANDOM FOREST ===")
+    logger.info("\n=== RANDOM FOREST ===")
     random_forest_model = train_random_forest_model(X_train, y_train)
     random_forest_results = evaluate_model(random_forest_model, X_validation, y_validation)
     predictions = random_forest_model.predict(X_validation)
@@ -120,7 +126,7 @@ def test_two_stage():
     # First stage classifier
     (X_classifier_train, y_classifier_train, X_classifier_validation, y_classifier_validation, feature_columns, oof_probabilities) = prepare_classifier_model_data(dataframe)
 
-    print("\n=== FIRST STAGE: CLASSIFIER ===")
+    logger.info("\n=== FIRST STAGE: CLASSIFIER ===")
     rf_classifier_model = train_random_forest_classifier(X_classifier_train, y_classifier_train)
     rf_classifier_results = evaluate_appearance_classifier(rf_classifier_model, X_classifier_validation, y_classifier_validation)
     
@@ -144,7 +150,7 @@ def test_two_stage():
     X_validation = X_validation.dropna( subset=["predicted_appearance_probability"] )
     y_validation = y_validation.loc[ X_validation.index ]
 
-    print("\n=== SECOND STAGE: RANDOM FOREST ===")
+    logger.info("\n=== SECOND STAGE: RANDOM FOREST ===")
     random_forest_model = train_random_forest_model(X_train, y_train)
     random_forest_results = evaluate_model(random_forest_model, X_validation, y_validation)
     predictions = random_forest_model.predict(X_validation)

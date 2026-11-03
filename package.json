@@ -1,7 +1,7 @@
 {
   "name": "fpl",
   "version": "1.0.0",
-  "description": "",
+  "description": "Fantasy Premier League points prediction: Node data service, Python two-stage model and React client",
   "main": "index.js",
   "scripts": {
     "server": "npm run dev --prefix server",

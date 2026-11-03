@@ -1,11 +1,11 @@
 {
-  "name": "server",
+  "name": "fpl-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "Express API that syncs Fantasy Premier League data into MongoDB and serves training and prediction features",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
+    "dev": "node --watch server.js",
     "test": "node --test tests/*.test.js"
   },
   "keywords": [],
@@ -20,8 +20,10 @@
     "express-async-handler": "^1.2.0",
     "express-rate-limit": "^8.7.3",
     "helmet": "^8.3.0",
-    "mongodb": "^7.6.0",
     "mongoose": "^9.9.5",
     "p-limit": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

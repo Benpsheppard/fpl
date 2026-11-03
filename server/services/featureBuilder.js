@@ -5,18 +5,21 @@
 // and semantics in both. The only thing that varies is the gameweek being
 // predicted: pass only gameweeks played before it as previousGameweeks.
 
+// Sum of a numeric field across rows, treating missing values as 0
+const sumBy = (rows, field) => rows.reduce((sum, row) => sum + (row[field] || 0), 0)
+
 const calculateWindow = (window) => {
-    const minutes = window.reduce( (sum, gameweek) => sum + (gameweek.minutes || 0), 0 )
-    const totalPoints = window.reduce( (sum, gameweek) => sum + (gameweek.totalPoints || 0), 0 )
+    const minutes = sumBy(window, "minutes")
+    const totalPoints = sumBy(window, "totalPoints")
 
-    const goals = window.reduce( (sum, gameweek) => sum + (gameweek.goalsScored || 0), 0 )
-    const assists = window.reduce( (sum, gameweek) => sum + (gameweek.assists || 0), 0 )
+    const goals = sumBy(window, "goalsScored")
+    const assists = sumBy(window, "assists")
 
-    const xG = Number( window.reduce( (sum, gameweek) => sum + (gameweek.expectedGoals || 0), 0 ).toFixed(2) )
-    const xA = Number( window.reduce( (sum, gameweek) => sum + (gameweek.expectedAssists || 0), 0 ).toFixed(2) )
-    const xGI = Number( window.reduce( (sum, gameweek) => sum + (gameweek.expectedGoalInvolvements || 0), 0 ).toFixed(2) )
+    const xG = Number( sumBy(window, "expectedGoals").toFixed(2) )
+    const xA = Number( sumBy(window, "expectedAssists").toFixed(2) )
+    const xGI = Number( sumBy(window, "expectedGoalInvolvements").toFixed(2) )
 
-    const starts = window.reduce( (sum, gameweek) => sum + (gameweek.starts || 0), 0 )
+    const starts = sumBy(window, "starts")
     const appearances = window.filter( (gameweek) => (gameweek.minutes || 0) > 0 ).length
 
     const pointsPer90 = minutes > 0 ? Number(((totalPoints / minutes) * 90).toFixed(2)) : 0
@@ -54,9 +57,9 @@ const calculateWindow = (window) => {
 
 const calculateAvailabilityFeatures = (lastGameweek, last3Gameweeks, last5Gameweeks, last10Gameweeks) => {
     const calculateAvailabilityWindow = (window) => {
-        const minutes = window.reduce( (sum, gameweek) => sum + (gameweek.minutes || 0), 0 )
+        const minutes = sumBy(window, "minutes")
 
-        const starts = window.reduce( (sum, gameweek) => sum + (gameweek.starts || 0), 0 )
+        const starts = sumBy(window, "starts")
         const appearances = window.filter( (gameweek) => (gameweek.minutes || 0) > 0 ).length
 
         const minutesPerGame = window.length > 0 ? Number((minutes / window.length).toFixed(2)) : 0
@@ -103,41 +106,19 @@ const calculateHistoricalFeaturesFromData = (seasons) => {
         }
     }
 
-    const totalPoints = seasons.reduce(
-        (sum, season) => sum + (season.totalPoints || 0),
-        0
-    )
+    const totalPoints = sumBy(seasons, "totalPoints")
 
-    const minutes = seasons.reduce(
-        (sum, season) => sum + (season.minutes || 0),
-        0
-    )
+    const minutes = sumBy(seasons, "minutes")
 
-    const goals = seasons.reduce(
-        (sum, season) => sum + (season.goalsScored || 0),
-        0
-    )
+    const goals = sumBy(seasons, "goalsScored")
 
-    const assists = seasons.reduce(
-        (sum, season) => sum + (season.assists || 0),
-        0
-    )
+    const assists = sumBy(seasons, "assists")
 
-    const xG = seasons.reduce(
-        (sum, season) => sum + (season.expectedGoals || 0),
-        0
-    )
+    const xG = sumBy(seasons, "expectedGoals")
 
-    const xA = seasons.reduce(
-        (sum, season) => sum + (season.expectedAssists || 0),
-        0
-    )
+    const xA = sumBy(seasons, "expectedAssists")
 
-    const xGI = seasons.reduce(
-        (sum, season) =>
-            sum + (season.expectedGoalInvolvements || 0),
-        0
-    )
+    const xGI = sumBy(seasons, "expectedGoalInvolvements")
 
     const pointsPer90 = minutes > 0
         ? Number(((totalPoints / minutes) * 90).toFixed(2))
@@ -190,45 +171,45 @@ const calculatePlayerFeaturesForGameweek = (player, previousGameweeks) => {
     const transfersIn = latestPreviousGameweek?.transfersIn || 0
     const transfersOut = latestPreviousGameweek?.transfersOut || 0
 
-    const totalPoints = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.totalPoints || 0), 0 )
-    const minutes = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.minutes || 0), 0 )
+    const totalPoints = sumBy(previousGameweeks, "totalPoints")
+    const minutes = sumBy(previousGameweeks, "minutes")
 
-    const goalsScored = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.goalsScored || 0), 0 )
-    const assists = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.assists || 0), 0 )
+    const goalsScored = sumBy(previousGameweeks, "goalsScored")
+    const assists = sumBy(previousGameweeks, "assists")
 
-    const cleanSheets = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.cleanSheets || 0), 0 )
-    const goalsConceded = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.goalsConceded || 0), 0 )
-    const saves = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.saves || 0), 0 )
+    const cleanSheets = sumBy(previousGameweeks, "cleanSheets")
+    const goalsConceded = sumBy(previousGameweeks, "goalsConceded")
+    const saves = sumBy(previousGameweeks, "saves")
 
-    const ownGoals = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.ownGoals || 0), 0 )
-    const penaltiesSaved = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.penaltiesSaved || 0), 0 )
-    const penaltiesMissed = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.penaltiesMissed || 0), 0 )
+    const ownGoals = sumBy(previousGameweeks, "ownGoals")
+    const penaltiesSaved = sumBy(previousGameweeks, "penaltiesSaved")
+    const penaltiesMissed = sumBy(previousGameweeks, "penaltiesMissed")
 
-    const bonus = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.bonus || 0), 0 )
-    const bps = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.bps || 0), 0 )
+    const bonus = sumBy(previousGameweeks, "bonus")
+    const bps = sumBy(previousGameweeks, "bps")
 
-    const expectedGoals = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.expectedGoals || 0), 0 )
-    const expectedAssists = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.expectedAssists || 0), 0 )
-    const expectedGoalInvolvements = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.expectedGoalInvolvements || 0), 0 )
-    const expectedGoalsConceded = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.expectedGoalsConceded || 0), 0 )
+    const expectedGoals = sumBy(previousGameweeks, "expectedGoals")
+    const expectedAssists = sumBy(previousGameweeks, "expectedAssists")
+    const expectedGoalInvolvements = sumBy(previousGameweeks, "expectedGoalInvolvements")
+    const expectedGoalsConceded = sumBy(previousGameweeks, "expectedGoalsConceded")
 
-    const influence = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.influence || 0), 0 )
-    const creativity = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.creativity || 0), 0 )
-    const threat = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.threat || 0), 0 )
-    const ictIndex = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.ictIndex || 0), 0 )
+    const influence = sumBy(previousGameweeks, "influence")
+    const creativity = sumBy(previousGameweeks, "creativity")
+    const threat = sumBy(previousGameweeks, "threat")
+    const ictIndex = sumBy(previousGameweeks, "ictIndex")
 
-    const yellowCards = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.yellowCards || 0), 0 )
-    const redCards = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.redCards || 0), 0 )
+    const yellowCards = sumBy(previousGameweeks, "yellowCards")
+    const redCards = sumBy(previousGameweeks, "redCards")
 
-    const clearancesBlocksInterceptions = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.clearancesBlocksInterceptions || 0), 0 )
-    const recoveries = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.recoveries || 0), 0 )
-    const tackles = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.tackles || 0), 0 )
+    const clearancesBlocksInterceptions = sumBy(previousGameweeks, "clearancesBlocksInterceptions")
+    const recoveries = sumBy(previousGameweeks, "recoveries")
+    const tackles = sumBy(previousGameweeks, "tackles")
 
-    const defensiveContribution = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.defensiveContribution || 0), 0 )
+    const defensiveContribution = sumBy(previousGameweeks, "defensiveContribution")
     const defensiveActions = clearancesBlocksInterceptions + recoveries + tackles
     const defensiveActionsPer90 = minutes > 0 ? Number(((defensiveActions / minutes) * 90).toFixed(2)) : 0
 
-    const starts = previousGameweeks.reduce( (sum, gameweek) => sum + (gameweek.starts || 0), 0 )
+    const starts = sumBy(previousGameweeks, "starts")
 
     const pointsPerGame = previousGameweeks.length > 0 ? Number( (totalPoints / previousGameweeks.length).toFixed(2) ) : 0
     const pointsPer90 = minutes > 0 ? Number(((totalPoints / minutes) * 90).toFixed(2)) : 0

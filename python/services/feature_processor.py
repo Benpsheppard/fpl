@@ -509,47 +509,18 @@ def prepare_training_dataframe(dataset):
 
 ### Classifier RF Prep
 
-def prepare_classifier_model_data(dataframe):
-    train_df, validation_df = split_training_data(dataframe)
+def prepare_classifier_model_data(dataframe, validation_gameweek=None):
+    # Chronological split: train on earlier gameweeks, validate on one gameweek
+    train_df, validation_df = split_training_data(dataframe, validation_gameweek)
 
     target_column = "target_totalMinutes"
-
-
-    feature_columns = select_classifier_features(dataframe)
-
-    oof_probabilities = generate_oof_appearance_probabilities(train_df, feature_columns)
-
-    X_train = train_df[feature_columns]
-    y_train = (train_df[target_column] > 0).astype(int)
-
-    X_validation = validation_df[feature_columns]
-    y_validation = (validation_df[target_column] > 0).astype(int)
-    
-    return (
-        X_train,
-        y_train,
-        X_validation,
-        y_validation,
-        feature_columns,
-        oof_probabilities
-    )
-
-def prepare_classifier_model_data_rolling_two_stage(dataframe, validation_gameweek):
-    target_column = "target_totalMinutes"
-
-    # Chronological split for this rolling fold
-    train_df = dataframe[dataframe["gameweek"] < validation_gameweek].copy()
-
-    validation_df = dataframe[dataframe["gameweek"] == validation_gameweek].copy()
-
 
     feature_columns = select_classifier_features(dataframe)
 
     if train_df.empty or validation_df.empty:
         raise ValueError(f"Insufficient data for GW{validation_gameweek}")
 
-    # Generate OOF probabilities ONLY within prior gameweeks.
-    # This function must itself split chronologically.
+    # Out-of-fold probabilities only use earlier gameweeks within the training set
     oof_probabilities = generate_oof_appearance_probabilities(train_df, feature_columns)
 
     X_train = train_df[feature_columns].copy()
@@ -557,12 +528,6 @@ def prepare_classifier_model_data_rolling_two_stage(dataframe, validation_gamewe
 
     X_validation = validation_df[feature_columns].copy()
     y_validation = (validation_df[target_column] > 0).astype(int)
-
-    # Guard against target leakage
-    assert not any(
-        col.startswith("target_")
-        for col in feature_columns
-    )
 
     return (
         X_train,
@@ -585,34 +550,8 @@ def split_training_data(dataframe, validation_gameweek=None):
 
     return train_df, validation_df
 
-def prepare_model_data(dataframe):
-    train_df, validation_df = split_training_data(dataframe)
-
-    target_column = "target_totalPoints"
-
-    feature_columns = select_regressor_features(dataframe)
-
-    X_train = train_df[feature_columns]
-    y_train = train_df[target_column]
-
-    X_validation = validation_df[feature_columns]
-    y_validation = validation_df[target_column]
-
-    return (
-        X_train,
-        y_train,
-        X_validation,
-        y_validation,
-        feature_columns
-    )
-
-### Rolling RF Prep
-
-def prepare_model_data_rolling(dataframe, validation_gameweek):
-    train_df, validation_df = split_training_data(
-        dataframe,
-        validation_gameweek
-    )
+def prepare_model_data(dataframe, validation_gameweek=None):
+    train_df, validation_df = split_training_data(dataframe, validation_gameweek)
 
     target_column = "target_totalPoints"
 
@@ -641,7 +580,7 @@ def run_rolling_validation(dataframe, start_gameweek=5, end_gameweek=None):
     for validation_gameweek in range(start_gameweek, end_gameweek + 1):
         print(f"\n=== VALIDATION GAMEWEEK {validation_gameweek} ===")
 
-        (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data_rolling( dataframe, validation_gameweek )
+        (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data(dataframe, validation_gameweek)
 
         if len(X_train) == 0 or len(X_validation) == 0:
             print("Skipping - insufficient data")
@@ -702,10 +641,10 @@ def run_rolling_two_stage_validation(dataframe, start_gameweek=2, end_gameweek=N
         print(f"\n=== TWO-STAGE VALIDATION GW" f"{validation_gameweek} ===")
 
         # STAGE 1: Appearance classifier
-        (X_classifier_train, y_classifier_train, X_classifier_validation, y_classifier_validation, classifier_features, oof_probabilities) = prepare_classifier_model_data_rolling_two_stage(dataframe, validation_gameweek=validation_gameweek)
+        (X_classifier_train, y_classifier_train, X_classifier_validation, y_classifier_validation, classifier_features, oof_probabilities) = prepare_classifier_model_data(dataframe, validation_gameweek)
 
         # STAGE 2: Points regressor data
-        (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data_rolling(dataframe, validation_gameweek)
+        (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data(dataframe, validation_gameweek)
 
         if (
             X_classifier_train.empty

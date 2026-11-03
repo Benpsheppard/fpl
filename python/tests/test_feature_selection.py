@@ -43,9 +43,9 @@ def test_classifier_features_only_come_from_whitelist(dataframe):
     assert "brand_new_feature" not in features
 
 
-def test_standard_and_rolling_prep_use_the_same_features(dataframe):
+def test_default_and_explicit_gameweek_use_the_same_features(dataframe):
     standard = fp.prepare_model_data(dataframe)
-    rolling = fp.prepare_model_data_rolling(dataframe, 4)
+    rolling = fp.prepare_model_data(dataframe, 4)
 
     assert standard[4] == rolling[4]
 

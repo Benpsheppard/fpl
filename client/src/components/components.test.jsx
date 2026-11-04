@@ -304,7 +304,7 @@ describe("PlayerCell", () => {
 
         const { container } = render(<PlayerCell player={{ name: "Haaland", team: 1, position: 4, isCaptain: true }} flag={flag} teamNames={clubNames} />)
 
-        expect(lines(container)[0]).toBe("HaalandC")
+        expect(lines(container)[0]).toBe("Haaland")
         expect(screen.getByTitle("Captain")).toBeInTheDocument()
     })
 
@@ -607,7 +607,7 @@ describe("MyTeam", () => {
             const [nameLine, metaLine] = stackOf("Raya").children
             expect(within(nameLine).getByTitle("Captain")).toBeInTheDocument()
             expect(metaLine).not.toHaveTextContent("C")
-            expect(lines(stackOf("Raya"))).toEqual(["RayaC", "ARS · GK"])
+            expect(lines(stackOf("Raya"))).toEqual(["Raya", "ARS · GK"])
         })
 
         it("puts the tag in the same place whatever kind of warning it is", () => {

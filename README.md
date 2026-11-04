@@ -6,7 +6,7 @@ Predicts a Fantasy Premier League player's points for their next fixture.
 |---|---|---|---|
 | Data service | [server/](server/) | Express + MongoDB. Syncs FPL data and builds model features. | `127.0.0.1:8000` |
 | Model service | [python/](python/) | FastAPI. Trains and serves the two-stage model. | `127.0.0.1:8001` |
-| Client | [client/](client/) | React + Vite scaffold, not wired up yet. | `localhost:5173` |
+| Client | [client/](client/) | React + Vite squad picker and transfer suggestions. | `localhost:5173` |
 
 ```
 FPL API ──sync──▶ Node/MongoDB ──training dataset──▶ Python ──train──▶ models/two_stage.joblib
@@ -119,6 +119,28 @@ features changed since training (retrain).
 
 Reads are limited to 300 requests a minute and writes to 10. Ids must be plain integers; `gameweek` is 1 to 38.
 
+## The app
+
+`npm run client` serves it at `localhost:5173`. It needs Node and Python running (see [Running](#running)) and a trained model.
+
+- **Best transfers.** For each player you own, the best replacement you can afford: same position, no more than three from a
+  club, within the player's *sell price* plus your bank. Ranked by expected points gained, minus 4 if you have no free
+  transfer. Swaps that gain less than 0.5 points are left out, because that is within the model's typical error (about 1.2).
+  Swaps for a player who is out of action come first. A bench player is worth only what the new player would add by taking a starting place, and each player to buy is listed once.
+- **Your team.** Loaded from the FPL website for the manager in `MY_FPL_MANAGER_ID`, with exact sell prices worked out from your
+  transfer history. Set *free transfers* by hand: FPL does not publish them.
+- **Players you could buy.** Everyone you don't already own, with filters (position, club, max price, name, hide injured, hide
+  doubtful) and sortable columns (price, expected points, chance of playing, points per £m).
+- **Flags.** *Out* (injured, suspended, unavailable), *Doubtful* (FPL gives a chance below 100%) and *Rotation risk* (fit, but the
+  model's first stage gives them under a 60% chance of playing). Hover a flag for FPL's note.
+- **Out-of-date banner.** Appears only when the prediction service reports the data or model is behind (see [Warnings](#warnings)).
+
+**Limits.** Predictions cover the next gameweek only, so a swap is judged on one game. FPL only publishes your squad as of the last
+deadline, so transfers made since then show only if FPL lists them (the page says "plus N pending transfers"). Sell prices use the
+standard rule (you keep half of any rise) and don't account for Free Hit oddities beyond reverting to the previous squad.
+
+The app reads from `localhost:8000` and `127.0.0.1:8001` by default; see [client/.env.example](client/.env.example) to change that.
+
 ## Reading a prediction
 
 `GET /predict/{player_id}` returns, among other fields:
@@ -173,12 +195,13 @@ The main risk is leakage: a feature that uses information from the gameweek bein
 ## Tests
 
 ```bash
-npm test                                           # both suites, from the repo root
+npm test                                           # all three suites, from the repo root
 npm run test:server                                # Node only, no database needed
 npm run test:python                                # Python only
+npm run test:client                                # React app (Vitest)
 ```
 
-[GitHub Actions](.github/workflows/ci.yml) runs both suites on every push and pull request, in parallel, from a clean
+[GitHub Actions](.github/workflows/ci.yml) runs all three suites (and lints and builds the client) on every push and pull request, in parallel, from a clean
 checkout using the lockfile (`npm ci`) and the pinned `requirements-dev.txt`. Neither needs MongoDB, the FPL API or
 any secrets. If CI fails but your machine passes, the usual cause is a dependency installed locally but missing from
 those files.

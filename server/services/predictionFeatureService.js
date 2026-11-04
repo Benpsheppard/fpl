@@ -10,12 +10,18 @@ const { buildFeatureSet } = require("./featureBuilder")
 // Statuses that mean the player cannot play: injured, suspended, unavailable, not in squad
 const UNAVAILABLE_STATUSES = new Set([ "i", "s", "u", "n" ])
 
+// The coming round: the earliest gameweek that still has a fixture to play
+const getNextRound = (fixtures) => {
+    const unfinished = fixtures.filter((fixture) => !fixture.finished && fixture.gameweek)
+
+    return unfinished.length > 0 ? Math.min(...unfinished.map((fixture) => fixture.gameweek)) : null
+}
+
 // How likely the player is to be available for the gameweek being predicted, as 0-1 (null when unknown).
 // FPL only publishes news for the coming round: "next round" before a gameweek starts,
 // "this round" once it is under way. Anything further ahead has no news, so no adjustment.
 const getAvailability = (player, fixtures, targetGameweek) => {
-    const unfinished = fixtures.filter((fixture) => !fixture.finished && fixture.gameweek)
-    const nextRound = unfinished.length > 0 ? Math.min(...unfinished.map((fixture) => fixture.gameweek)) : null
+    const nextRound = getNextRound(fixtures)
 
     if (targetGameweek !== nextRound) {
         return { status: player.status, chance: null, basis: "none", source: "none" }
@@ -37,6 +43,35 @@ const getAvailability = (player, fixtures, targetGameweek) => {
     }
 
     return { status: player.status, chance: null, basis, source: "none" }
+}
+
+const FIXTURE_RUN_LENGTH = 5
+const LAST_GAMEWEEK = 38
+
+// A team's fixtures over the next few gameweeks, like FPL's own fixture ticker. The window starts at the
+// coming round for every team, so players' columns line up: a blank gameweek is simply missing, and a double
+// gameweek has two entries. If the round is under way, a match already played is included and marked.
+const getFixtureRun = (fixtures, teamId, fromGameweek, length = FIXTURE_RUN_LENGTH) => {
+    const toGameweek = Math.min(LAST_GAMEWEEK, fromGameweek + length - 1)
+    const kickoff = (fixture) => (fixture.kickoffTime ? new Date(fixture.kickoffTime).getTime() : 0)
+
+    const run = fixtures
+        .filter((fixture) => fixture.gameweek >= fromGameweek && fixture.gameweek <= toGameweek)
+        .filter((fixture) => fixture.homeTeam === teamId || fixture.awayTeam === teamId)
+        .sort((a, b) => (a.gameweek - b.gameweek) || (kickoff(a) - kickoff(b)))
+        .map((fixture) => {
+            const isHome = fixture.homeTeam === teamId
+
+            return {
+                gameweek: fixture.gameweek,
+                opponent: isHome ? fixture.awayTeam : fixture.homeTeam,
+                isHome,
+                difficulty: Number(isHome ? fixture.homeTeamDifficulty : fixture.awayTeamDifficulty),
+                played: Boolean(fixture.finished)
+            }
+        })
+
+    return { fromGameweek, toGameweek, fixtures: run }
 }
 
 const getUpcomingFixtures = (fixtures, playerTeamId, now) => {
@@ -221,7 +256,8 @@ const buildPredictionPayload = ({ player, playerGameweeks, seasons, fixtures, fi
             status: player.status,
             chanceOfPlayingThisRound: player.chanceOfPlayingThisRound,
             chanceOfPlayingNextRound: player.chanceOfPlayingNextRound,
-            fixtureLookahead: calculateFixtureLookahead(player.team, upcomingFixtures, now)
+            fixtureLookahead: calculateFixtureLookahead(player.team, upcomingFixtures, now),
+            upcomingFixtures: getFixtureRun(fixtures, player.team, getNextRound(fixtures) ?? nextFixture.gameweek)
         }
     }
 }
@@ -296,5 +332,6 @@ const getAllPredictionFeatures = async () => {
 
 module.exports = {
     getPredictionFeatures,
-    getAllPredictionFeatures
+    getAllPredictionFeatures,
+    getFixtureRun
 }

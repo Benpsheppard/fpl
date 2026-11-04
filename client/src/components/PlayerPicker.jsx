@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import AppearanceBar from "./AppearanceBar"
+import FixtureRun from "./FixtureRun"
 import FlagBadge from "./FlagBadge"
 import { getFlag } from "../lib/flags"
 import { filterAndSort, pointsPerMillion } from "../lib/picker"
@@ -28,6 +29,7 @@ const PlayerPicker = ({ players, teams, ownedIds }) => {
     const [shown, setShown] = useState(PAGE_SIZE)
 
     const teamNames = useMemo(() => new Map(teams.map((club) => [club.fplId, club.shortName])), [teams])
+    const clubs = useMemo(() => new Map(teams.map((club) => [club.fplId, club])), [teams])
 
     const rows = useMemo(() => filterAndSort(players, {
         position: position === "" ? null : Number(position),
@@ -117,6 +119,7 @@ const PlayerPicker = ({ players, teams, ownedIds }) => {
                                                 </button>
                                             </th>
                                         ))}
+                                        <th scope="col">Next 5 gameweeks</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -131,6 +134,7 @@ const PlayerPicker = ({ players, teams, ownedIds }) => {
                                             <td className="num">{points(player.expected_points)}</td>
                                             <td><AppearanceBar probability={player.appearance_probability} /></td>
                                             <td className="num">{points(pointsPerMillion(player))}</td>
+                                            <td><FixtureRun run={player.upcoming_fixtures} clubs={clubs} /></td>
                                         </tr>
                                     ))}
                                 </tbody>

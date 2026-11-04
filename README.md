@@ -131,6 +131,10 @@ Reads are limited to 300 requests a minute and writes to 10. Ids must be plain i
   transfer history. Set *free transfers* by hand: FPL does not publish them.
 - **Players you could buy.** Everyone you don't already own, with filters (position, club, max price, name, hide injured, hide
   doubtful) and sortable columns (price, expected points, chance of playing, points per £m).
+- **Fixtures.** Each player shows their next five gameweeks, coloured by FPL's own 1-5 difficulty rating: deep green (1, easiest),
+  green (2), grey (3, neutral), red (4) and deep red (5, hardest), with (H) home or (A) away. A blank gameweek is a gap (–),
+  a double gameweek shows two fixtures in one cell, and a match already played this round is faded. Hover a fixture for the
+  full club name and rating. The same window starts at the coming round for every player, so the columns line up.
 - **Flags.** *Out* (injured, suspended, unavailable), *Doubtful* (FPL gives a chance below 100%) and *Rotation risk* (fit, but the
   model's first stage gives them under a 60% chance of playing). Hover a flag for FPL's note.
 - **Out-of-date banner.** Appears only when the prediction service reports the data or model is behind (see [Warnings](#warnings)).

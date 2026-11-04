@@ -58,3 +58,16 @@ export const myTeam = (squad, overrides = {}) => ({
     squad,
     ...overrides,
 })
+
+// A run of fixtures as /predict reports it. Each entry is [gameweek, opponent club id, isHome, difficulty].
+export const fixtureRun = (entries, { from = 10, to = 14 } = {}) => ({
+    from_gameweek: from,
+    to_gameweek: to,
+    fixtures: entries.map(([gameweek, opponent, isHome, difficulty, played = false]) => ({ gameweek, opponent, is_home: isHome, difficulty, played })),
+})
+
+export const clubsMap = () => new Map([
+    [1, { fplId: 1, name: "Arsenal", shortName: "ARS" }],
+    [2, { fplId: 2, name: "Aston Villa", shortName: "AVL" }],
+    [3, { fplId: 3, name: "Bournemouth", shortName: "BOU" }],
+])

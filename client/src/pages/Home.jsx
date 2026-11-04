@@ -2,6 +2,7 @@ import { useMemo } from "react"
 import MyTeam from "../components/MyTeam"
 import PlayerPicker from "../components/PlayerPicker"
 import TransferSuggestions from "../components/TransferSuggestions"
+import FixtureLegend from "../components/FixtureLegend"
 import WarningsBanner from "../components/WarningsBanner"
 import { useDashboard } from "../hooks/useDashboard"
 import { useStoredNumber } from "../hooks/useStoredNumber"
@@ -19,6 +20,11 @@ const Home = () => {
 
     const teamNames = useMemo(
         () => new Map((data?.teams ?? []).map((club) => [club.fplId, club.shortName])),
+        [data],
+    )
+
+    const clubs = useMemo(
+        () => new Map((data?.teams ?? []).map((club) => [club.fplId, club])),
         [data],
     )
 
@@ -68,6 +74,8 @@ const Home = () => {
                 </p>
             </header>
 
+            <FixtureLegend />
+
             <WarningsBanner
                 warnings={data.predictions.warnings}
                 dataThrough={data.predictions.data_through_gameweek}
@@ -83,11 +91,12 @@ const Home = () => {
             <div className="layout">
                 {team && (
                     <div className="column">
-                        <TransferSuggestions swaps={distinctSwaps} teamNames={teamNames} freeTransfers={freeTransfers} />
+                        <TransferSuggestions swaps={distinctSwaps} teamNames={teamNames} clubs={clubs} freeTransfers={freeTransfers} />
                         <MyTeam
                             team={team}
                             squad={squad}
                             teamNames={teamNames}
+                            clubs={clubs}
                             bestSwaps={bestSwaps}
                             freeTransfers={freeTransfers}
                             onFreeTransfersChange={setFreeTransfers}

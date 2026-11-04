@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
 import { fireEvent, render, screen, within } from "@testing-library/react"
 import AppearanceBar from "./AppearanceBar"
+import FixtureLegend from "./FixtureLegend"
+import FixtureRun from "./FixtureRun"
 import FlagBadge from "./FlagBadge"
 import MyTeam from "./MyTeam"
 import PlayerPicker from "./PlayerPicker"
@@ -9,7 +11,7 @@ import WarningsBanner from "./WarningsBanner"
 import { getFlag } from "../lib/flags"
 import { joinSquad } from "../lib/squad"
 import { bestSwapByPlayer, suggestSwaps } from "../lib/transfers"
-import { myTeam, ownedPlayer, prediction, withAvailability } from "../test/fixtures"
+import { clubsMap, fixtureRun, myTeam, ownedPlayer, prediction, withAvailability } from "../test/fixtures"
 
 const teams = [
     { fplId: 1, name: "Arsenal", shortName: "ARS" },
@@ -430,5 +432,167 @@ describe("MyTeam", () => {
     it("stops at five free transfers", () => {
         setup({ freeTransfers: 5 })
         expect(screen.getByRole("button", { name: "More free transfers" })).toBeDisabled()
+    })
+})
+
+
+describe("FixtureRun", () => {
+    const chips = (container) => [...container.querySelectorAll(".fixture")]
+
+    it("shows each opponent with H or A and colours it by difficulty", () => {
+        const run = fixtureRun([[10, 1, true, 2], [11, 2, false, 3], [12, 3, true, 5]], { from: 10, to: 12 })
+
+        const { container } = render(<FixtureRun run={run} clubs={clubsMap()} />)
+
+        const [easy, neutral, hardest] = chips(container)
+        expect(easy).toHaveTextContent("ARS (H)")
+        expect(easy).toHaveClass("fixture-easy")
+        expect(neutral).toHaveTextContent("AVL (A)")
+        expect(neutral).toHaveClass("fixture-neutral")
+        expect(hardest).toHaveTextContent("BOU (H)")
+        expect(hardest).toHaveClass("fixture-hardest")
+    })
+
+    it.each([
+        [1, "fixture-easiest"],
+        [2, "fixture-easy"],
+        [3, "fixture-neutral"],
+        [4, "fixture-hard"],
+        [5, "fixture-hardest"],
+    ])(
+        "colours difficulty %s as %s",
+        (difficulty, className) => {
+            const { container } = render(<FixtureRun run={fixtureRun([[10, 1, true, difficulty]], { from: 10, to: 10 })} clubs={clubsMap()} />)
+
+            expect(chips(container)[0]).toHaveClass(className)
+        },
+    )
+
+    it("describes each fixture in words as well as colour", () => {
+        render(<FixtureRun run={fixtureRun([[10, 1, false, 5]], { from: 10, to: 10 })} clubs={clubsMap()} />)
+
+        const chip = screen.getByLabelText("Gameweek 10: away at Arsenal, hardest (5 out of 5)")
+        expect(chip).toHaveAttribute("title", "Gameweek 10: away at Arsenal, hardest (5 out of 5)")
+    })
+
+    it("shows a dash for a gameweek with no fixture, so a blank is visible", () => {
+        const { container } = render(<FixtureRun run={fixtureRun([[10, 1, true, 2], [12, 2, true, 3]], { from: 10, to: 12 })} clubs={clubsMap()} />)
+
+        const blank = screen.getByLabelText("Gameweek 11: no fixture")
+        expect(blank).toHaveClass("fixture-blank")
+        expect(blank).toHaveTextContent("–")
+        expect(container.querySelectorAll(".fixture-cell")).toHaveLength(3)
+    })
+
+    it("puts a double gameweek's two fixtures in one cell", () => {
+        const { container } = render(<FixtureRun run={fixtureRun([[10, 1, true, 2], [10, 3, false, 4]], { from: 10, to: 11 })} clubs={clubsMap()} />)
+
+        const [first, second] = container.querySelectorAll(".fixture-cell")
+        expect(first.querySelectorAll(".fixture")).toHaveLength(2)
+        expect(second.querySelectorAll(".fixture")).toHaveLength(1) // gameweek 11 is blank
+    })
+
+    it("fades a match that has already been played", () => {
+        const { container } = render(<FixtureRun run={fixtureRun([[10, 1, true, 2, true]], { from: 10, to: 10 })} clubs={clubsMap()} />)
+
+        expect(chips(container)[0]).toHaveClass("fixture-played")
+        expect(screen.getByLabelText(/already played/)).toBeInTheDocument()
+    })
+
+    it("falls back to the team number when the club is unknown", () => {
+        const { container } = render(<FixtureRun run={fixtureRun([[10, 99, true, 2]], { from: 10, to: 10 })} clubs={clubsMap()} />)
+
+        expect(chips(container)[0]).toHaveTextContent("#99 (H)")
+    })
+
+    it("does not colour a fixture whose difficulty is unknown", () => {
+        const { container } = render(<FixtureRun run={fixtureRun([[10, 1, true, null]], { from: 10, to: 10 })} clubs={clubsMap()} />)
+
+        expect(chips(container)[0]).toHaveClass("fixture-unknown")
+    })
+
+    it.each([[null], [undefined], [{}]])("shows a dash when there is no run (%j)", (run) => {
+        const { container } = render(<FixtureRun run={run} clubs={clubsMap()} />)
+
+        expect(container).toHaveTextContent("–")
+        expect(container.querySelector(".fixture-run")).toBeNull()
+    })
+
+    it("is a list a screen reader can name", () => {
+        render(<FixtureRun run={fixtureRun([[10, 1, true, 2]], { from: 10, to: 11 })} clubs={clubsMap()} />)
+
+        expect(screen.getByRole("list", { name: "Upcoming fixtures" })).toBeInTheDocument()
+        expect(screen.getAllByRole("listitem")).toHaveLength(2)
+    })
+})
+
+describe("FixtureLegend", () => {
+    it("shows all five ratings, numbered as on FPL's site, each in its own colour", () => {
+        render(<FixtureLegend />)
+
+        expect(screen.getByText("1 Easiest")).toHaveClass("fixture-easiest")
+        expect(screen.getByText("2 Easy")).toHaveClass("fixture-easy")
+        expect(screen.getByText("3 Neutral")).toHaveClass("fixture-neutral")
+        expect(screen.getByText("4 Hard")).toHaveClass("fixture-hard")
+        expect(screen.getByText("5 Hardest")).toHaveClass("fixture-hardest")
+    })
+
+    it("explains H and A", () => {
+        render(<FixtureLegend />)
+
+        expect(screen.getByText(/\(H\) home, \(A\) away/)).toBeInTheDocument()
+    })
+})
+
+describe("fixtures where players are listed", () => {
+    const run = (opponent, difficulty) => fixtureRun([[10, opponent, true, difficulty]], { from: 10, to: 10 })
+    const clubs = clubsMap()
+    const teamList = [...clubs.values()]
+
+    it("appear for every row of the player picker", () => {
+        const players = [
+            prediction({ playerId: 1, name: "Easy", upcoming_fixtures: run(1, 2) }),
+            prediction({ playerId: 2, name: "Hard", upcoming_fixtures: run(2, 5) }),
+        ]
+
+        render(<PlayerPicker players={players} teams={teamList} ownedIds={new Set()} />)
+
+        expect(screen.getByRole("columnheader", { name: "Next 5 gameweeks" })).toBeInTheDocument()
+        const [easyRow, hardRow] = screen.getAllByRole("row").slice(1)
+        expect(within(easyRow).getByText("ARS (H)")).toHaveClass("fixture-easy")
+        expect(within(hardRow).getByText("AVL (H)")).toHaveClass("fixture-hardest")
+    })
+
+    it("appear for your own players, even a benched one", () => {
+        const team = myTeam([ownedPlayer({ playerId: 5, webName: "Austin", elementType: 1, position: 13 })])
+        const squad = joinSquad(team, [prediction({ playerId: 5, name: "Austin", position: 1, upcoming_fixtures: run(3, 4) })])
+
+        render(<MyTeam team={team} squad={squad} teamNames={new Map()} clubs={clubs} bestSwaps={new Map()} freeTransfers={1} onFreeTransfersChange={() => {}} />)
+
+        expect(screen.getByText("BOU (H)")).toHaveClass("fixture-hard")
+    })
+
+    it("show a dash for a player with no fixtures", () => {
+        const team = myTeam([ownedPlayer({ playerId: 5, webName: "Gone", elementType: 3 })])
+
+        render(<MyTeam team={team} squad={joinSquad(team, [])} teamNames={new Map()} clubs={clubs} bestSwaps={new Map()} freeTransfers={1} onFreeTransfersChange={() => {}} />)
+
+        expect(screen.queryByRole("list", { name: "Upcoming fixtures" })).not.toBeInTheDocument()
+    })
+
+    it("appear for both players in a swap, so you can compare them", () => {
+        const squad = joinSquad(
+            myTeam([ownedPlayer({ playerId: 12, webName: "Saka", elementType: 3, team: 1, sellPrice: 8 })]),
+            [prediction({ playerId: 12, name: "Saka", position: 3, expected_points: 1, upcoming_fixtures: run(2, 5) })],
+        )
+        const candidates = [prediction({ playerId: 20, name: "Rice", position: 3, team: 1, price: 7, expected_points: 5, upcoming_fixtures: run(1, 1) })]
+        const swaps = suggestSwaps({ squad, candidates, bank: 0, freeTransfers: 1 })
+
+        const { container } = render(<TransferSuggestions swaps={swaps} teamNames={new Map()} clubs={clubs} freeTransfers={1} />)
+
+        // The fixture cells are list items too, so pick out the swap row itself
+        const item = container.querySelector(".swap")
+        expect(within(item).getByText("AVL (H)")).toHaveClass("fixture-hardest") // Saka's
+        expect(within(item).getByText("ARS (H)")).toHaveClass("fixture-easiest") // Rice's
     })
 })

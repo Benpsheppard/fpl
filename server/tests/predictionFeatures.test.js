@@ -1,4 +1,5 @@
 const test = require("node:test")
+const { describe, it } = test
 const assert = require("node:assert/strict")
 const fs = require("node:fs")
 const path = require("node:path")
@@ -7,7 +8,7 @@ const Player = require("../models/playerModel")
 const PlayerGameweek = require("../models/playerGameweekModel")
 const PlayerSeason = require("../models/playerSeasonModel")
 const Fixture = require("../models/fixtureModel")
-const { getPredictionFeatures, getAllPredictionFeatures } = require("../services/predictionFeatureService")
+const { getPredictionFeatures, getAllPredictionFeatures, getFixtureRun } = require("../services/predictionFeatureService")
 const { buildTrainingDataset } = require("../services/trainingDatasetService")
 
 const query = (rows) => {
@@ -340,4 +341,110 @@ test("all-players handles an empty database", async () => {
     const all = await withManyPlayers(rows, () => getAllPredictionFeatures())
 
     assert.deepEqual(all, { freshness: { dataThroughGameweek: null, latestFinishedFixtureGameweek: null }, count: 0, players: [] })
+})
+
+
+// --- the fixture run --------------------------------------------------------
+
+describe("the fixture run", () => {
+    // Team 10's next fixtures. upcoming() sets home difficulty 3 and away difficulty 5.
+    const fixture = (fplId, gameweek, homeTeam, awayTeam, extra = {}) => ({
+        fplId, gameweek, homeTeam, awayTeam,
+        finished: false, kickoffTime: future(gameweek),
+        homeTeamDifficulty: 2, awayTeamDifficulty: 4,
+        ...extra
+    })
+
+    const run = (fixtures, team = 10, from = 4, length) => getFixtureRun(fixtures, team, from, length)
+
+    it("lists the team's fixtures with the opponent, venue and the difficulty for their side", () => {
+        const result = run([ fixture(1, 4, 50, 10), fixture(2, 5, 10, 60) ])
+
+        assert.deepEqual(result.fixtures, [
+            { gameweek: 4, opponent: 50, isHome: false, difficulty: 4, played: false },
+            { gameweek: 5, opponent: 60, isHome: true, difficulty: 2, played: false }
+        ])
+    })
+
+    it("covers five gameweeks starting at the coming round", () => {
+        const fixtures = [ 4, 5, 6, 7, 8, 9, 10 ].map((gw) => fixture(gw, gw, 10, 50 + gw))
+
+        const result = run(fixtures)
+
+        assert.deepEqual([result.fromGameweek, result.toGameweek], [4, 8])
+        assert.deepEqual(result.fixtures.map((f) => f.gameweek), [4, 5, 6, 7, 8])
+    })
+
+    it("lists a double gameweek as two fixtures in the same gameweek, earliest first", () => {
+        const result = run([
+            fixture(2, 5, 10, 61, { kickoffTime: future(20) }),
+            fixture(1, 5, 70, 10, { kickoffTime: future(10) })
+        ], 10, 5)
+
+        assert.deepEqual(result.fixtures.map((f) => [f.gameweek, f.opponent]), [[5, 70], [5, 61]])
+    })
+
+    it("leaves a blank gameweek out, so the gap shows", () => {
+        const result = run([ fixture(1, 4, 10, 50), fixture(2, 6, 10, 60) ])
+
+        assert.deepEqual(result.fixtures.map((f) => f.gameweek), [4, 6])
+    })
+
+    it("ignores other teams' fixtures", () => {
+        const result = run([ fixture(1, 4, 10, 50), fixture(2, 4, 70, 80) ])
+
+        assert.equal(result.fixtures.length, 1)
+    })
+
+    it("marks a match already played in the round under way, so it isn't mistaken for a blank", () => {
+        const result = run([
+            fixture(1, 4, 10, 50, { finished: true }),
+            fixture(2, 5, 10, 60)
+        ])
+
+        assert.deepEqual(result.fixtures.map((f) => [f.gameweek, f.played]), [[4, true], [5, false]])
+    })
+
+    it("never runs past the last gameweek", () => {
+        const result = run([ fixture(1, 37, 10, 50), fixture(2, 38, 10, 60) ], 10, 37)
+
+        assert.equal(result.toGameweek, 38)
+        assert.equal(result.fixtures.length, 2)
+    })
+
+    it("can be a different length", () => {
+        const fixtures = [ 4, 5, 6, 7 ].map((gw) => fixture(gw, gw, 10, 50 + gw))
+
+        assert.equal(run(fixtures, 10, 4, 2).fixtures.length, 2)
+    })
+
+    it("is empty for a team with nothing coming up", () => {
+        assert.deepEqual(run([ fixture(1, 4, 70, 80) ]).fixtures, [])
+    })
+
+    it("is in the payload for every player, starting at the same round", async () => {
+        const rows = data()
+        rows.fixtures.push(upcoming(106, 6, 60, 10, 20)) // gameweek 6, away
+
+        const result = await withStubs(rows, () => getPredictionFeatures(1))
+        const upcomingRun = result.context.upcomingFixtures
+
+        assert.deepEqual([upcomingRun.fromGameweek, upcomingRun.toGameweek], [4, 8])
+        assert.deepEqual(
+            upcomingRun.fixtures.map((f) => [f.gameweek, f.opponent, f.isHome, f.difficulty]),
+            [[4, 50, false, 5], [5, 60, true, 3], [6, 60, false, 5]]
+        )
+    })
+
+    it("starts at the league-wide coming round even when the team has a blank there", async () => {
+        const rows = data()
+        // Team 10 has no gameweek 4 match; other teams still do, so the round is 4 for everyone
+        rows.fixtures = rows.fixtures.filter((f) => f.fplId !== 104)
+        rows.fixtures.push(upcoming(107, 4, 80, 90, 3))
+
+        const result = await withStubs(rows, () => getPredictionFeatures(1))
+
+        assert.equal(result.context.upcomingFixtures.fromGameweek, 4)
+        assert.deepEqual(result.context.upcomingFixtures.fixtures.map((f) => f.gameweek), [5])
+    })
 })

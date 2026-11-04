@@ -186,6 +186,27 @@ def staleness_warnings(metadata, freshness):
     return warnings
 
 
+def format_upcoming_fixtures(run):
+    """The next few gameweeks' fixtures as the client wants them, or None if Node didn't send any."""
+    if not run:
+        return None
+
+    return {
+        "from_gameweek": run.get("fromGameweek"),
+        "to_gameweek": run.get("toGameweek"),
+        "fixtures": [
+            {
+                "gameweek": fixture["gameweek"],
+                "opponent": fixture["opponent"],
+                "is_home": fixture["isHome"],
+                "difficulty": fixture["difficulty"],
+                "played": fixture.get("played", False),
+            }
+            for fixture in run.get("fixtures", [])
+        ],
+    }
+
+
 def build_prediction(bundle, payload, features_row, result):
     """One player's response: the model's figure, then each adjustment applied to it."""
     context = payload.get("context") or {}
@@ -207,6 +228,7 @@ def build_prediction(bundle, payload, features_row, result):
         "price": name.get("price"),
         # FPL's note on injuries and availability, shown next to a flagged player
         "news": name.get("news") or "",
+        "upcoming_fixtures": format_upcoming_fixtures(context.get("upcomingFixtures")),
         "gameweek": int(result["gameweek"]),
 
         # What to rank by: the model's figure, adjusted for a double gameweek and for injury news

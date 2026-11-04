@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import Home from "./Home"
-import { myTeam, ownedPlayer, prediction, withAvailability } from "../test/fixtures"
+import { fixtureRun, myTeam, ownedPlayer, prediction, withAvailability } from "../test/fixtures"
 
 const predictions = [
     // Owned
-    prediction({ playerId: 1, name: "Raya", position: 1, team: 1, price: 6.2, expected_points: 5.1 }),
-    withAvailability("i", 0, { playerId: 12, name: "Saka", position: 3, team: 1, price: 10.5, expected_points: 0, news: "Hamstring injury", appearance_probability: 0.35 }),
+    prediction({ playerId: 1, name: "Raya", position: 1, team: 1, price: 6.2, expected_points: 5.1, upcoming_fixtures: fixtureRun([[10, 10, true, 3]], { from: 10, to: 11 }) }),
+    withAvailability("i", 0, { playerId: 12, name: "Saka", position: 3, team: 1, price: 10.5, expected_points: 0, news: "Hamstring injury", appearance_probability: 0.35, upcoming_fixtures: fixtureRun([[10, 15, false, 5]], { from: 10, to: 11 }) }),
     prediction({ playerId: 3, name: "Jackson", position: 4, team: 2, price: 7.0, expected_points: 5.8 }),
     // Could be bought
-    prediction({ playerId: 20, name: "Rice", position: 3, team: 1, price: 7.4, expected_points: 4.8 }),
+    prediction({ playerId: 20, name: "Rice", position: 3, team: 1, price: 7.4, expected_points: 4.8, upcoming_fixtures: fixtureRun([[10, 2, true, 2], [11, 10, false, 4]], { from: 10, to: 12 }) }),
     prediction({ playerId: 21, name: "Iwobi", position: 3, team: 10, price: 5.4, expected_points: 4.6 }),
     prediction({ playerId: 22, name: "Haaland", position: 4, team: 15, price: 15.8, expected_points: 6.6 }),
     withAvailability("i", 0, { playerId: 24, name: "Hurt", position: 3, team: 10, price: 5.0, expected_points: 0 }),
@@ -120,6 +120,63 @@ describe("Home", () => {
         const bought = within(swaps).getAllByRole("listitem").filter((item) => within(item).queryByText("Rice"))
 
         expect(bought).toHaveLength(1)
+    })
+
+    describe("fixtures", () => {
+        it("explains the colours", async () => {
+            respond()
+            render(<Home />)
+            await screen.findByRole("region", { name: "My Team" })
+
+            const key = screen.getByLabelText("Fixture difficulty key")
+            expect(within(key).getByText("1 Easiest")).toHaveClass("fixture-easiest")
+            expect(within(key).getByText("2 Easy")).toHaveClass("fixture-easy")
+            expect(within(key).getByText("3 Neutral")).toHaveClass("fixture-neutral")
+            expect(within(key).getByText("4 Hard")).toHaveClass("fixture-hard")
+            expect(within(key).getByText("5 Hardest")).toHaveClass("fixture-hardest")
+        })
+
+        it("shows a player's upcoming fixtures, coloured, in the list of players to buy", async () => {
+            respond()
+            render(<Home />)
+            const picker = await screen.findByRole("region", { name: "Players you could buy" })
+
+            const rice = within(picker).getByText("Rice").closest("tr")
+            expect(within(rice).getByText("AVL (H)")).toHaveClass("fixture-easy")
+            expect(within(rice).getByText("BHA (A)")).toHaveClass("fixture-hard")
+            // Gameweek 12 has no fixture: a visible gap
+            expect(within(rice).getByLabelText("Gameweek 12: no fixture")).toBeInTheDocument()
+        })
+
+        it("shows the fixtures of the players you own", async () => {
+            respond()
+            render(<Home />)
+            const team = await screen.findByRole("region", { name: "My Team" })
+
+            const raya = within(team).getByText("Raya").closest("tr")
+            expect(within(raya).getByText("BHA (H)")).toHaveClass("fixture-neutral")
+            const saka = within(team).getByText("Saka").closest("tr")
+            expect(within(saka).getByText("MCI (A)")).toHaveClass("fixture-hardest")
+        })
+
+        it("lets you compare the player to sell and the player to buy in a swap", async () => {
+            respond()
+            render(<Home />)
+            const swaps = await screen.findByRole("region", { name: "Best transfers" })
+
+            const [first] = within(swaps).getAllByRole("listitem").filter((item) => item.classList.contains("swap"))
+            // Saka's tough away game against the easier home game for Rice
+            expect(within(first).getByText("MCI (A)")).toHaveClass("fixture-hardest")
+            expect(within(first).getByText("AVL (H)")).toHaveClass("fixture-easy")
+        })
+
+        it("still works when the service sends no fixtures at all", async () => {
+            respond({ predict: { body: { players: predictions.map((player) => Object.fromEntries(Object.entries(player).filter(([key]) => key !== "upcoming_fixtures"))), warnings: [] } } })
+            render(<Home />)
+
+            expect(await screen.findByRole("region", { name: "My Team" })).toBeInTheDocument()
+            expect(screen.queryByRole("list", { name: "Upcoming fixtures" })).not.toBeInTheDocument()
+        })
     })
 
     it("does not recommend buying the injured player", async () => {

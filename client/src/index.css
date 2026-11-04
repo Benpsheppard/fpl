@@ -157,3 +157,62 @@ tbody th { font-weight: 400; }
 .more { display: block; margin: 0.75rem auto 0; }
 
 .bench { display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.75rem; background: var(--border); color: var(--muted); }
+
+/* Fixture difficulty, FPL's 1-5: deep green, green, grey, red, deep red.
+   The pale levels use dark text and the deep ones white; every pair clears 4.5:1 contrast. */
+:root {
+    --easiest-bg: #1b7a43;
+    --easiest: #ffffff;
+    --easy-bg: #c7ebd5;
+    --easy: #14532d;
+    --neutral-bg: #dfe3ea;
+    --neutral: #3b4252;
+    --hard-bg: #f5c6c1;
+    --hard: #7f1d1d;
+    --hardest-bg: #b42318;
+    --hardest: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --easiest-bg: #2f9e63;
+        --easiest: #06210f;
+        --easy-bg: #1f4d37;
+        --easy: #a7e8c4;
+        --neutral-bg: #343b49;
+        --neutral: #cbd2e0;
+        --hard-bg: #5c2622;
+        --hard: #ffb4ab;
+        --hardest-bg: #cc3f35;
+        --hardest: #ffffff;
+    }
+}
+
+.fixture-run { display: flex; gap: 0.25rem; list-style: none; margin: 0; padding: 0; }
+.fixture-cell { display: grid; gap: 2px; align-content: start; }
+
+.fixture {
+    display: inline-block;
+    min-width: 4.3rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+}
+.fixture-easiest { background: var(--easiest-bg); color: var(--easiest); }
+.fixture-easy { background: var(--easy-bg); color: var(--easy); }
+.fixture-neutral { background: var(--neutral-bg); color: var(--neutral); }
+.fixture-hard { background: var(--hard-bg); color: var(--hard); }
+.fixture-hardest { background: var(--hardest-bg); color: var(--hardest); }
+.fixture-unknown { border: 1px dashed var(--border); color: var(--muted); }
+/* A match already played this round: shown, but faded so it isn't read as an upcoming one */
+.fixture-played { opacity: 0.5; text-decoration: line-through; }
+.fixture-blank { border: 1px dashed var(--border); color: var(--muted); font-weight: 400; }
+
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0 0 1rem; }
+.legend .fixture { min-width: 0; }
+
+.swap-side { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.4rem; }
+.swap-side .fixture-run { flex-basis: 100%; margin-left: 2.4rem; }

@@ -211,3 +211,67 @@ def test_a_schema_mismatch_asks_for_a_retrain_rather_than_a_500(monkeypatch, mod
 
     assert response.status_code == 409
     assert "Retrain" in response.json()["detail"]
+
+
+# --- upcoming fixtures ------------------------------------------------------
+
+RUN = {
+    "fromGameweek": 10,
+    "toGameweek": 14,
+    "fixtures": [
+        {"gameweek": 10, "opponent": 7, "isHome": True, "difficulty": 2, "played": False},
+        {"gameweek": 12, "opponent": 3, "isHome": False, "difficulty": 5, "played": False},
+        {"gameweek": 12, "opponent": 9, "isHome": True, "difficulty": 3, "played": False},
+    ],
+}
+
+
+def with_run(run):
+    body = payload(5)
+    body["context"]["upcomingFixtures"] = run
+    return body
+
+
+def test_upcoming_fixtures_are_passed_through_in_the_shape_the_client_reads(monkeypatch, model):
+    monkeypatch.setattr(main, "load_prediction_features", lambda player_id: with_run(RUN))
+
+    run = client.get("/predict/5").json()["upcoming_fixtures"]
+
+    assert (run["from_gameweek"], run["to_gameweek"]) == (10, 14)
+    assert run["fixtures"][0] == {"gameweek": 10, "opponent": 7, "is_home": True, "difficulty": 2, "played": False}
+    # A double gameweek stays two entries in the same gameweek, and a blank (11) is simply absent
+    assert [(f["gameweek"], f["opponent"]) for f in run["fixtures"]] == [(10, 7), (12, 3), (12, 9)]
+
+
+def test_a_played_fixture_keeps_its_flag(monkeypatch, model):
+    run = {**RUN, "fixtures": [{"gameweek": 10, "opponent": 7, "isHome": True, "difficulty": 2, "played": True}]}
+    monkeypatch.setattr(main, "load_prediction_features", lambda player_id: with_run(run))
+
+    assert client.get("/predict/5").json()["upcoming_fixtures"]["fixtures"][0]["played"] is True
+
+
+def test_an_older_node_that_sends_no_fixtures_still_works(monkeypatch, model):
+    monkeypatch.setattr(main, "load_prediction_features", lambda player_id: payload(5))
+
+    response = client.get("/predict/5")
+
+    assert response.status_code == 200
+    assert response.json()["upcoming_fixtures"] is None
+
+
+def test_a_team_with_nothing_coming_up_has_an_empty_list(monkeypatch, model):
+    monkeypatch.setattr(main, "load_prediction_features", lambda player_id: with_run({"fromGameweek": 10, "toGameweek": 14, "fixtures": []}))
+
+    assert client.get("/predict/5").json()["upcoming_fixtures"]["fixtures"] == []
+
+
+def test_every_player_in_the_ranking_carries_their_fixtures(monkeypatch, model):
+    players = [with_run(RUN) | {"playerId": 1}, with_run(RUN) | {"playerId": 2}]
+    for body in players:
+        body["context"]["player"] = payload(body["playerId"])["context"]["player"]
+    serve(monkeypatch, players)
+
+    ranked = client.get("/predict").json()["players"]
+
+    assert len(ranked) == 2
+    assert all(len(p["upcoming_fixtures"]["fixtures"]) == 3 for p in ranked)

@@ -141,12 +141,18 @@ tbody th { font-weight: 400; }
 .chance-value { font-variant-numeric: tabular-nums; font-size: 0.85rem; min-width: 3ch; }
 
 .swap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
-.swap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; }
+/* One box: the transfer (sell, buy) on the left and what it's worth on the right */
+.swap { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.5rem 1rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; }
 .swap-priority { border-color: var(--bad); background: var(--bad-bg); }
 .swap-players { display: grid; gap: 0.2rem; }
 .swap-label { display: inline-block; width: 2.4rem; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; }
-.swap-numbers { display: grid; gap: 0.1rem; text-align: right; align-content: start; }
-.gain { color: var(--good); font-size: 1.1rem; }
+.swap-numbers { display: grid; gap: 0.1rem; min-width: 6.5rem; padding-left: 1rem; border-left: 1px solid var(--border); text-align: right; align-content: center; }
+/* Too narrow for two columns: the numbers go underneath, still inside the box */
+@media (max-width: 560px) {
+    .swap { grid-template-columns: 1fr; }
+    .swap-numbers { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.75rem; padding: 0.4rem 0 0; border-left: 0; border-top: 1px solid var(--border); text-align: left; }
+}
+.gain { color: var(--good); font-size: 1.35rem; }
 .swap-hint strong { color: var(--good); }
 
 .filters { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; align-items: end; margin-bottom: 0.75rem; }
@@ -215,4 +221,4 @@ tbody th { font-weight: 400; }
 .legend .fixture { min-width: 0; }
 
 .swap-side { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.4rem; }
-.swap-side .fixture-run { flex-basis: 100%; margin-left: 2.4rem; }
+.swap-side .fixture-run { flex-basis: 100%; flex-wrap: wrap; margin-left: 2.4rem; }

@@ -24,6 +24,9 @@ def synthetic_training_data(seed=0, gameweeks=5, per_gameweek=40):
     rows = gameweeks * per_gameweek
     columns = fp.CLASSIFIER_FEATURES + ["brand_new_feature"]
     df = pd.DataFrame(rng.random((rows, len(columns))), columns=columns)
+    # Present in real data; the model uses them (see difficulty_head.py)
+    df["fixtures_isHome"] = rng.integers(0, 2, rows)
+    df["fixtures_difficulty"] = rng.integers(1, 6, rows)
     df["playerId"] = np.tile(np.arange(per_gameweek), gameweeks)
     df["gameweek"] = np.repeat(np.arange(1, gameweeks + 1), per_gameweek)
     df["target_totalMinutes"] = np.where(rng.random(rows) > 0.3, 90, 0)

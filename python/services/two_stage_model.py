@@ -19,10 +19,10 @@ from services.feature_processor import (
     select_classifier_features,
     select_regressor_features,
 )
+from services.difficulty_head import train_regressor_with_difficulty_head
 from services.predictor import (
     generate_oof_appearance_probabilities,
     train_random_forest_classifier,
-    train_random_forest_model,
 )
 
 MODEL_PATH = os.getenv(
@@ -80,7 +80,7 @@ def train_two_stage_model(dataframe):
         dataframe[classifier_features],
         (dataframe["target_totalMinutes"] > 0).astype(int),
     )
-    regressor = train_random_forest_model(X_regressor, y_regressor)
+    regressor = train_regressor_with_difficulty_head(X_regressor, y_regressor, dataframe.loc[usable, "gameweek"])
 
     return {
         "classifier": classifier,
@@ -256,6 +256,56 @@ def build_prediction(bundle, payload, features_row, result):
     }
 
 
+def forecast_outlook(bundle, payloads, predictions):
+    """Add each player's expected points over a window of gameweeks to their prediction.
+
+    Each later gameweek is predicted from a row that only knows what was known before the first one,
+    exactly as the model saw its training rows for that horizon. Injury news only exists for the coming
+    round, so later gameweeks carry none: a player who is out now is still priced as fit later on.
+    """
+    later = [
+        (index, {"playerId": payload["playerId"], "gameweek": row["gameweek"], "features": row["features"]})
+        for index, payload in enumerate(payloads)
+        for row in (payload.get("horizon") or {}).get("later", [])
+    ]
+    later_predictions = {}
+
+    if later:
+        frame = prepare_prediction_dataframe([row for _, row in later])
+        results = predict_two_stage(bundle, frame)
+        double_gameweek_rows = bundle["metadata"].get("double_gameweek_training_rows", 0)
+
+        for position, (index, _) in enumerate(later):
+            fixtures = int(frame.iloc[position].get("fixtures_fixturesInGameweek", 1))
+            adjusted = adjust_prediction(float(results.iloc[position]["predicted_points"]), fixtures, double_gameweek_rows, None)
+            later_predictions.setdefault(index, []).append({
+                "gameweek": int(results.iloc[position]["gameweek"]),
+                "expected_points": adjusted["expected_points"],
+                "fixtures_in_gameweek": fixtures,
+            })
+
+    for index, (payload, prediction) in enumerate(zip(payloads, predictions)):
+        window = payload.get("horizon")
+        if not window:
+            continue
+
+        gameweeks = [
+            {
+                "gameweek": prediction["gameweek"],
+                "expected_points": prediction["expected_points"],
+                "fixtures_in_gameweek": prediction["fixtures_in_gameweek"],
+            }
+        ] if prediction["gameweek"] <= window["toGameweek"] else []
+        gameweeks += sorted(later_predictions.get(index, []), key=lambda row: row["gameweek"])
+
+        prediction["outlook"] = {
+            "from_gameweek": window["fromGameweek"],
+            "to_gameweek": window["toGameweek"],
+            "gameweeks": gameweeks,
+            "total_expected_points": float(sum(row["expected_points"] for row in gameweeks)),
+        }
+
+
 def predict_payloads(bundle, payloads):
     """Predict many players with one pass through the model."""
     if not payloads:
@@ -264,7 +314,10 @@ def predict_payloads(bundle, payloads):
     frame = prepare_prediction_dataframe(payloads)
     results = predict_two_stage(bundle, frame)
 
-    return [
+    predictions = [
         build_prediction(bundle, payloads[i], frame.iloc[i], results.iloc[i])
         for i in range(len(payloads))
     ]
+    forecast_outlook(bundle, payloads, predictions)
+
+    return predictions

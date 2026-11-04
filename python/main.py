@@ -19,6 +19,7 @@ from services.dataset_loader import (
     PlayerNotFoundError
 )
 from services.decision_backtest import backtest_decisions
+from services.horizon_backtest import backtest_horizons
 from services.model_comparison import compare_models, json_safe
 from services.two_stage_model import (
     predict_payloads,
@@ -310,12 +311,16 @@ def predict_all(
     team: int | None = Query(default=None, ge=1),
     max_price: float | None = Query(default=None, gt=0, description="In millions, e.g. 7.5"),
     limit: int = Query(default=50, ge=1, le=1000),
+    horizon: int = Query(default=1, ge=1, le=5, description="Gameweeks to look ahead. Above 1, each player also gets an `outlook`."),
 ):
-    """Every active player's next-fixture prediction, best expected points first."""
+    """Every active player's next-fixture prediction, best expected points first.
+
+    With a horizon, players are ranked by their expected points over the whole window. Beyond the next
+    gameweek the model is little better than recent form, so those totals are less certain."""
     bundle = get_model()
 
     try:
-        data = load_all_prediction_features()
+        data = load_all_prediction_features(horizon) if horizon > 1 else load_all_prediction_features()
     except DatasetLoadError as error:
         raise HTTPException(status_code=502, detail=str(error))
 
@@ -333,11 +338,16 @@ def predict_all(
     payloads = [payload for payload in data["players"] if wanted(payload)]
     predictions = prediction_errors(lambda: predict_payloads(bundle, payloads))
 
-    predictions.sort(key=lambda p: (p["expected_points"], p["predicted_points"]), reverse=True)
+    def ranking(prediction):
+        total = (prediction.get("outlook") or {}).get("total_expected_points", prediction["expected_points"])
+        return (total, prediction["expected_points"], prediction["predicted_points"])
+
+    predictions.sort(key=ranking, reverse=True)
 
     freshness = data.get("freshness") or {}
 
     return {
+        "horizon": horizon,
         "count": len(predictions),
         "returned": min(limit, len(predictions)),
         "model_trained_through_gameweek": bundle["metadata"]["trained_through_gameweek"],
@@ -383,5 +393,30 @@ def backtest_player_comparisons(
 
     if result["gameweeks"] == 0:
         raise HTTPException(status_code=422, detail="No gameweeks had enough data to backtest")
+
+    return json_safe(result)
+
+
+@app.get("/dataset/test/horizons")
+def backtest_forecast_horizons(
+    max_horizon: int = Query(default=3, ge=1, le=5, description="How many gameweeks ahead to test, from 1"),
+    start_gameweek: int | None = None,
+    end_gameweek: int | None = None,
+):
+    """How much worse is the forecast the further ahead it looks? Scored on the same gameweeks and players at each horizon."""
+    frames = {}
+
+    for horizon in range(1, max_horizon + 1):
+        try:
+            dataset = load_training_dataset(horizon=horizon)
+        except DatasetLoadError as error:
+            raise HTTPException(status_code=502, detail=str(error))
+
+        frames[horizon] = add_features(prepare_training_dataframe(dataset))
+
+    result = backtest_horizons(frames, start_gameweek, end_gameweek)
+
+    if "by_horizon" not in result:
+        raise HTTPException(status_code=422, detail="No gameweeks had enough data to test these horizons")
 
     return json_safe(result)

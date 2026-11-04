@@ -61,10 +61,13 @@ def _get_json(path, params, get, sleep):
     )
 
 
-def load_training_dataset(max_gameweek=None, get=requests.get, sleep=time.sleep):
+def load_training_dataset(max_gameweek=None, horizon=1, get=requests.get, sleep=time.sleep):
+    """horizon is how many gameweeks ahead the rows look: 1 is the usual next-gameweek dataset."""
     params = {}
     if max_gameweek is not None:
         params["maxGameweek"] = max_gameweek
+    if horizon != 1:
+        params["horizon"] = horizon
 
     data = _get_json("/api/training/dataset", params, get, sleep)
 
@@ -91,9 +94,12 @@ def load_prediction_features(player_id, get=requests.get, sleep=time.sleep):
     return data
 
 
-def load_all_prediction_features(get=requests.get, sleep=time.sleep):
-    """Features for every active player's next fixture, in one request."""
-    data = _get_json("/api/prediction/all", {}, get, sleep)
+def load_all_prediction_features(horizon=1, get=requests.get, sleep=time.sleep):
+    """Features for every active player's next fixture, in one request.
+
+    With a horizon above 1, each player also carries rows for their later fixtures in that window."""
+    params = {"horizon": horizon} if horizon != 1 else {}
+    data = _get_json("/api/prediction/all", params, get, sleep)
 
     if not isinstance(data, dict) or not isinstance(data.get("players"), list):
         raise DatasetLoadError("Node API returned an unexpected prediction payload")

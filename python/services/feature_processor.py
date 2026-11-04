@@ -396,8 +396,7 @@ REGRESSOR_EXCLUDED_FEATURES = [
     # "historical_xAPer90",
     # "historical_xGIPer90",
 
-    "fixtures_isHome",
-    "fixtures_difficulty",
+    # fixtures_isHome and fixtures_difficulty are used (see difficulty_head.py)
 
     # "player_elementType",
     # "player_totalPoints",
@@ -521,9 +520,9 @@ def prepare_training_dataframe(dataset):
 
 ### Classifier RF Prep
 
-def prepare_classifier_model_data(dataframe, validation_gameweek=None):
+def prepare_classifier_model_data(dataframe, validation_gameweek=None, train_before=None, train_frame=None):
     # Chronological split: train on earlier gameweeks, validate on one gameweek
-    train_df, validation_df = split_training_data(dataframe, validation_gameweek)
+    train_df, validation_df = split_training_data(dataframe, validation_gameweek, train_before, train_frame)
 
     target_column = "target_totalMinutes"
 
@@ -552,18 +551,31 @@ def prepare_classifier_model_data(dataframe, validation_gameweek=None):
 
 ### Standard RF Prep
 
-def split_training_data(dataframe, validation_gameweek=None):
+def split_training_data(dataframe, validation_gameweek=None, train_before=None, train_frame=None):
+    """Split into the rows to learn from and the gameweek to predict.
+
+    train_before: learn only from gameweeks before this one. It is the validation gameweek unless
+        the forecast is made several gameweeks ahead, when results from the gameweeks in between
+        weren't known yet.
+    train_frame: learn from these rows instead (e.g. rows built for looking one gameweek ahead),
+        while still predicting the rows in dataframe.
+    """
     # Default to validating on the latest gameweek in the data
     if validation_gameweek is None:
         validation_gameweek = int(dataframe["gameweek"].max())
 
-    train_df = dataframe[dataframe["gameweek"] < validation_gameweek].copy()
+    if train_before is None:
+        train_before = validation_gameweek
+
+    source = dataframe if train_frame is None else train_frame
+
+    train_df = source[source["gameweek"] < train_before].copy()
     validation_df = dataframe[dataframe["gameweek"] == validation_gameweek].copy()
 
     return train_df, validation_df
 
-def prepare_model_data(dataframe, validation_gameweek=None):
-    train_df, validation_df = split_training_data(dataframe, validation_gameweek)
+def prepare_model_data(dataframe, validation_gameweek=None, train_before=None, train_frame=None):
+    train_df, validation_df = split_training_data(dataframe, validation_gameweek, train_before, train_frame)
 
     target_column = "target_totalPoints"
 
@@ -643,23 +655,38 @@ def run_rolling_validation(dataframe, start_gameweek=5, end_gameweek=None):
 
 ### Rolling Two-stage Prep
 
-def fit_two_stage_fold(dataframe, validation_gameweek):
-    """Fit both stages on gameweeks before validation_gameweek and predict that gameweek.
+def default_regressor_trainer(X_train, y_train, gameweeks=None):
+    """The usual stage-2 learner. A trainer takes the rows to learn from and the gameweek of each (some
+    learners need to know when each row happened) and returns a fitted model with a predict method."""
+    from services.difficulty_head import train_regressor_with_difficulty_head
+    return train_regressor_with_difficulty_head(X_train, y_train, gameweeks)
+
+
+def fit_two_stage_fold(dataframe, validation_gameweek, horizon=1, train_frame=None, train_regressor=None):
+    """Fit both stages on what was known and predict validation_gameweek.
+
+    horizon: how many gameweeks ahead the forecast is made. At 1 the model learns from every
+        gameweek before the one it predicts. At 3 it learns only from gameweeks up to two earlier,
+        because a forecast made three gameweeks ahead didn't have the results in between yet.
+    train_frame: learn from these rows instead of dataframe's own (see split_training_data).
+    train_regressor: the stage-2 learner, to try an alternative (see default_regressor_trainer).
 
     Returns None when there is no data to train or validate on. Otherwise returns the
     regressor's training rows (with the appearance probability column), the validation
     rows, the actual points, and the two-stage predictions.
     """
-    train_df, validation_df = split_training_data(dataframe, validation_gameweek)
+    train_before = validation_gameweek - horizon + 1
+
+    train_df, validation_df = split_training_data(dataframe, validation_gameweek, train_before, train_frame)
 
     if train_df.empty or validation_df.empty:
         return None
 
     # STAGE 1: Appearance classifier
-    (X_classifier_train, y_classifier_train, X_classifier_validation, y_classifier_validation, classifier_features, oof_probabilities) = prepare_classifier_model_data(dataframe, validation_gameweek)
+    (X_classifier_train, y_classifier_train, X_classifier_validation, y_classifier_validation, classifier_features, oof_probabilities) = prepare_classifier_model_data(dataframe, validation_gameweek, train_before, train_frame)
 
     # STAGE 2: Points regressor data
-    (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data(dataframe, validation_gameweek)
+    (X_train, y_train, X_validation, y_validation, feature_columns) = prepare_model_data(dataframe, validation_gameweek, train_before, train_frame)
 
     # Prevent target leakage
     for columns in [X_classifier_train.columns, X_classifier_validation.columns, X_train.columns, X_validation.columns]:
@@ -702,7 +729,9 @@ def fit_two_stage_fold(dataframe, validation_gameweek):
     if set(X_validation.index) != set(X_classifier_validation.index):
         raise ValueError("Classifier and regressor validation rows do not match")
 
-    regressor = train_random_forest_model(X_train, y_train)
+    source = dataframe if train_frame is None else train_frame
+    trainer = train_regressor or default_regressor_trainer
+    regressor = trainer(X_train, y_train, gameweeks=source.loc[X_train.index, "gameweek"])
 
     return {
         "X_train": X_train,

@@ -72,17 +72,28 @@ const getJson = async (baseUrl, path, service, { signal, fetchImpl = fetch } = {
     return response.json()
 }
 
-export const fetchPredictions = (options) => getJson(PYTHON_URL, "/predict?limit=1000", "predictions", options)
+export const fetchPredictions = (options = {}) => {
+    const { horizon = 1, ...rest } = options
+
+    return getJson(PYTHON_URL, `/predict?limit=1000${horizon > 1 ? `&horizon=${horizon}` : ""}`, "predictions", rest)
+}
 export const fetchMyTeam = (options) => getJson(NODE_URL, "/api/my-team", "team", options)
 export const fetchTeams = (options) => getJson(NODE_URL, "/api/teams", "teams", options)
 
 // Predictions are essential. Your team and the club names make the page better but it still works without them,
 // so their failures are reported alongside rather than stopping everything.
+const withoutHorizon = (options = {}) => {
+    const rest = { ...options }
+    delete rest.horizon
+
+    return rest
+}
+
 export const loadAll = async (options = {}) => {
     const [ predictions, team, teams ] = await Promise.allSettled([
         fetchPredictions(options),
-        fetchMyTeam(options),
-        fetchTeams(options),
+        fetchMyTeam(withoutHorizon(options)),
+        fetchTeams(withoutHorizon(options)),
     ])
 
     if (predictions.status === "rejected") {

@@ -36,6 +36,19 @@ describe("loadAll", () => {
         expect(result.problems).toEqual({ team: null, teams: null })
     })
 
+    it("asks for the gameweeks ahead only when there is more than one", async () => {
+        const urls = async (options) => {
+            const fetchImpl = fakeFetch(good)
+            await loadAll({ fetchImpl, ...options })
+            return fetchImpl.mock.calls.map(([url]) => url)
+        }
+
+        expect((await urls({ horizon: 3 })).some((url) => url.endsWith("/predict?limit=1000&horizon=3"))).toBe(true)
+        expect((await urls({ horizon: 1 })).some((url) => url.includes("horizon"))).toBe(false)
+        // Only predictions take a horizon
+        expect((await urls({ horizon: 3 })).filter((url) => url.includes("horizon"))).toHaveLength(1)
+    })
+
     it("asks for every player in one request", async () => {
         const fetchImpl = fakeFetch(good)
 

@@ -258,3 +258,9 @@ tbody th { font-weight: 400; }
 .swap-weak { border: 2px dashed var(--warn-border); }
 .swap-weak .gain { color: var(--muted); }
 .swap-hint-weak strong { color: var(--muted); }
+
+/* Choosing how many gameweeks to look ahead */
+.horizon { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+.horizon-option { border: 1px solid var(--border); background: var(--surface); color: inherit; border-radius: 999px; padding: 0.3rem 0.8rem; }
+.horizon-active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.reliability-unmeasured { color: var(--muted); font-style: italic; }

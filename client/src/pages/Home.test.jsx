@@ -60,7 +60,62 @@ afterEach(() => {
     vi.restoreAllMocks()
 })
 
+const withOutlooks = (rows) => rows.map((row) => ({
+    ...row,
+    outlook: { from_gameweek: 10, to_gameweek: 12, gameweeks: [], total_expected_points: row.expected_points * 3 },
+}))
+
 describe("Home", () => {
+    describe("looking more than one gameweek ahead", () => {
+        const body = { players: withOutlooks(predictions), warnings: [], data_through_gameweek: 9, model_trained_through_gameweek: 9, horizon: 3 }
+        const predictUrls = () => fetch.mock.calls.map(([url]) => url).filter((url) => url.includes("/predict"))
+
+        it("starts on the next gameweek", async () => {
+            respond()
+            render(<Home />)
+
+            const button = await screen.findByRole("button", { name: "Next gameweek" })
+
+            expect(button).toHaveAttribute("aria-pressed", "true")
+            expect(predictUrls().every((url) => !url.includes("horizon"))).toBe(true)
+        })
+
+        it("asks for the longer window and ranks by the totals", async () => {
+            respond({ predict: { body } })
+            render(<Home />)
+
+            fireEvent.click(await screen.findByRole("button", { name: "3 gameweeks" }))
+
+            await screen.findByText(/Expected points for gameweeks 10 to 12/)
+            expect(predictUrls().some((url) => url.endsWith("&horizon=3"))).toBe(true)
+            expect(screen.getByRole("button", { name: "3 gameweeks" })).toHaveAttribute("aria-pressed", "true")
+            // Haaland: 6.6 a gameweek, 19.8 over three
+            const picker = screen.getByRole("region", { name: "Players you could buy" })
+            expect(within(picker).getByText("19.8")).toBeInTheDocument()
+        })
+
+        it("says there is no track record for the longer view", async () => {
+            respond({ predict: { body } })
+            render(<Home />)
+
+            fireEvent.click(await screen.findByRole("button", { name: "3 gameweeks" }))
+
+            expect(await screen.findByText(/no track record for these totals/)).toBeInTheDocument()
+        })
+
+        it("remembers the choice", async () => {
+            respond({ predict: { body } })
+            const { unmount } = render(<Home />)
+            fireEvent.click(await screen.findByRole("button", { name: "3 gameweeks" }))
+            await screen.findByText(/Expected points for gameweeks 10 to 12/)
+            unmount()
+
+            render(<Home />)
+
+            expect(await screen.findByRole("button", { name: "3 gameweeks" })).toHaveAttribute("aria-pressed", "true")
+        })
+    })
+
     it("shows a loading message, then the page", async () => {
         respond()
         render(<Home />)

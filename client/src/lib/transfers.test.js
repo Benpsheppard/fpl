@@ -186,6 +186,20 @@ describe("suggestSwaps", () => {
             expect(result).toHaveLength(1)
         })
 
+        it("asks for a bigger gain when the points cover several gameweeks", () => {
+            const input = { squad: [owned({ expected_points: 4.4 })], candidates: [candidate({ expected_points: 5.0 })] }
+
+            expect(swapsFor(input)).toHaveLength(1)
+            expect(swapsFor({ ...input, horizon: 5 })).toEqual([])
+        })
+
+        it("says how many gameweeks a swap was judged over", () => {
+            const [swap] = swapsFor({ squad: [owned()], candidates: [candidate({ expected_points: 12 })], horizon: 3 })
+
+            expect(swap.horizon).toBe(3)
+            expect(swapsFor({ squad: [owned()], candidates: [candidate()] })[0].horizon).toBe(1)
+        })
+
         it("never suggests a worse player", () => {
             const result = swapsFor({ squad: [owned({ expected_points: 5 })], candidates: [candidate({ expected_points: 3 })] })
 

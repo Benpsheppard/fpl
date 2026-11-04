@@ -395,6 +395,17 @@ describe("TransferSuggestions", () => {
             expect(label).toHaveClass("reliability-strong")
         })
 
+        it("shows no track record for a swap judged over several gameweeks, and says why", () => {
+            const swaps = swapOf({ owned: 3, candidate: 5.2 }).map((swap) => ({ ...swap, horizon: 3 }))
+            const { container } = render(<TransferSuggestions swaps={swaps} teamNames={names} freeTransfers={1} horizon={3} />)
+
+            expect(within(itemOf(container)).queryByText(/of the time/)).toBeNull()
+            expect(within(itemOf(container)).getByText("less certain over 3 gameweeks")).toBeInTheDocument()
+            expect(["swap-weak", "swap-good", "swap-strong"].some((name) => itemOf(container).classList.contains(name))).toBe(false)
+            expect(screen.getByText(/no track record for these totals/)).toBeInTheDocument()
+            expect(screen.getByText(/the next 3 gameweeks added together/)).toBeInTheDocument()
+        })
+
         it("gives each reliability its own outline class, and only one", () => {
             const classesFor = (owned, candidate) => {
                 const { container, unmount } = renderSwaps(swapOf({ owned, candidate }))

@@ -7,15 +7,20 @@ import WarningsBanner from "../components/WarningsBanner"
 import { useDashboard } from "../hooks/useDashboard"
 import { useStoredNumber } from "../hooks/useStoredNumber"
 import { joinSquad } from "../lib/squad"
+import { describeWindow, forHorizon, HORIZONS } from "../lib/horizon"
 import { bestSwapByPlayer, bestSwapPerIncoming, suggestSwaps } from "../lib/transfers"
 
 const NO_PLAYERS = []
 
 const Home = () => {
-    const { status, error, data, reload } = useDashboard()
+    const [storedHorizon, setHorizon] = useStoredNumber("fpl.horizon", 1, { min: 1, max: 5 })
+    const horizon = HORIZONS.includes(storedHorizon) ? storedHorizon : 1
+    const { status, error, data, reload } = useDashboard(horizon)
     const [freeTransfers, setFreeTransfers] = useStoredNumber("fpl.freeTransfers", 1, { min: 0, max: 5 })
 
-    const players = data?.predictions.players ?? NO_PLAYERS
+    const rawPlayers = data?.predictions.players
+    // Each player's expected points become the total over the chosen window
+    const players = useMemo(() => (rawPlayers ? forHorizon(rawPlayers, horizon) : NO_PLAYERS), [rawPlayers, horizon])
     const team = data?.team ?? null
 
     const teamNames = useMemo(
@@ -38,9 +43,10 @@ const Home = () => {
                 candidates: players.filter((player) => !ownedIds.has(player.playerId)),
                 bank: team.bank,
                 freeTransfers,
+                horizon,
             })
             : NO_PLAYERS
-    ), [team, squad, players, ownedIds, freeTransfers])
+    ), [team, squad, players, ownedIds, freeTransfers, horizon])
 
     const bestSwaps = useMemo(() => bestSwapByPlayer(swaps), [swaps])
     const distinctSwaps = useMemo(() => bestSwapPerIncoming(swaps), [swaps])
@@ -59,20 +65,35 @@ const Home = () => {
         )
     }
 
-    const gameweek = players[0]?.gameweek
+    const windowText = describeWindow(players, horizon)
 
     return (
         <main className="page">
             <header className="page-header">
                 <h1>FPL squad picker</h1>
                 <p className="muted">
-                    {gameweek ? `Expected points for gameweek ${gameweek}` : "Expected points"}
+                    {windowText ? `Expected points for ${windowText}` : "Expected points"}
                     {" · "}
                     <button type="button" className="link" onClick={reload} disabled={status === "loading"}>
                         {status === "loading" ? "Refreshing…" : "Refresh"}
                     </button>
                 </p>
             </header>
+
+            <div className="horizon" role="group" aria-label="How far ahead to look">
+                <span className="muted">Look ahead:</span>
+                {HORIZONS.map((option) => (
+                    <button
+                        key={option}
+                        type="button"
+                        className={option === horizon ? "horizon-option horizon-active" : "horizon-option"}
+                        aria-pressed={option === horizon}
+                        onClick={() => setHorizon(option)}
+                    >
+                        {option === 1 ? "Next gameweek" : `${option} gameweeks`}
+                    </button>
+                ))}
+            </div>
 
             <FixtureLegend />
 
@@ -91,7 +112,7 @@ const Home = () => {
             <div className="layout">
                 {team && (
                     <div className="column">
-                        <TransferSuggestions swaps={distinctSwaps} teamNames={teamNames} clubs={clubs} freeTransfers={freeTransfers} />
+                        <TransferSuggestions swaps={distinctSwaps} teamNames={teamNames} clubs={clubs} freeTransfers={freeTransfers} horizon={horizon} />
                         <MyTeam
                             team={team}
                             squad={squad}

@@ -1,6 +1,7 @@
 // transfers.js
 
 import { getFlag } from "./flags"
+import { minGainForHorizon } from "./horizon"
 //
 // Single-swap suggestions: for each player you own, who you could buy instead. Prices are
 // compared in tenths of a million so 0.1 + 0.2 style rounding errors can't decide a budget.
@@ -29,6 +30,8 @@ export const suggestSwaps = ({
     maxPerClub = MAX_PER_CLUB,
     minNetGain = MIN_NET_GAIN,
     perPlayer = 3,
+    // How many gameweeks the expected points cover (the points are already totals over that window)
+    horizon = 1,
 }) => {
     const hit = freeTransfers >= 1 ? 0 : hitCost
     const ownedIds = new Set(squad.map((player) => player.playerId))
@@ -81,6 +84,7 @@ export const suggestSwaps = ({
                     in: candidate,
                     gain,
                     hitCost: hit,
+                    horizon,
                     netGain: gain - hit,
                     // Negative means the swap costs money
                     priceChange: (tenths(owned.sellPrice) - tenths(candidate.price)) / 10,
@@ -90,7 +94,7 @@ export const suggestSwaps = ({
                     benchUpgrade: isBench(owned),
                 }
             })
-            .filter((swap) => swap.netGain >= minNetGain)
+            .filter((swap) => swap.netGain >= minGainForHorizon(minNetGain, horizon))
             .sort((a, b) => b.netGain - a.netGain)
             .slice(0, perPlayer)
 

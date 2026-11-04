@@ -98,8 +98,9 @@ The model does not retrain on its own. Until you refresh, predictions use the la
 | `POST /model/train` | Train and save the two-stage model. Needs the API key. |
 | `GET /model` | Summary of the current model: rows, latest gameweek trained on. |
 | `GET /predict/{player_id}` | Prediction for the player's next fixture. See [Reading a prediction](#reading-a-prediction). |
-| `GET /predict` | Every active player, best `expected_points` first. Filters: `position` (1 GK, 2 DEF, 3 MID, 4 FWD), `team`, `max_price` (in millions), `limit` (default 50). |
+| `GET /predict` | Every active player, best `expected_points` first. Filters: `position` (1 GK, 2 DEF, 3 MID, 4 FWD), `team`, `max_price` (in millions), `limit` (default 50), `horizon` (1 to 5, default 1). With a horizon above 1 each player gets an `outlook`: expected points for each gameweek in the window and their total, and players are ranked by that total. |
 | `GET /dataset/test/compare` | Single-stage vs two-stage on identical validation players, with a paired significance check. |
+| `GET /dataset/test/horizons` | How much worse is the forecast the further ahead it looks (`max_horizon`, default 3)? Scored on the same gameweeks and players at each horizon, against a model trained on that horizon's own rows and a plain last-five-games rule. About 30 seconds. |
 | `GET /dataset/test/backtest` | Do the model's differences between players hold up? How often the higher-rated player of each same-position pair really scored more, by size of the gap. Takes about 15 seconds. |
 | `GET /dataset/test*` | Other validation experiments (single split, rolling, two-stage). Slow; they log metrics. |
 
@@ -110,10 +111,10 @@ features changed since training (retrain).
 
 | Route | Description |
 |---|---|
-| `GET /api/training/dataset?maxGameweek=N` | Training rows. Cached until the next sync. |
+| `GET /api/training/dataset?maxGameweek=N&horizon=H` | Training rows. `horizon` (1 to 5, default 1) builds each row as a forecast made H gameweeks earlier would have seen it: older form, older team form, the later fixture. Cached per horizon until the next sync. |
 | `GET /api/training/:playerId/:gameweek` | One training row. |
 | `GET /api/prediction?playerId=N` | Features for the player's next fixture. |
-| `GET /api/prediction/all` | The same for every active player, loading the data once. |
+| `GET /api/prediction/all?horizon=H` | The same for every active player, loading the data once. With `horizon` above 1, each player also carries a row for each later gameweek in the window, built from what is known before the first one (as training rows for that horizon are). |
 | `GET /api/players`, `/api/players/:playerId[/gameweeks\|seasons\|fixtures\|analysis]` | Stored player data. |
 | `GET /api/fpl/...` | Proxies for the FPL API (bootstrap, fixtures, managers, player history). |
 | `POST /api/fpl/sync-*` | Sync into MongoDB. Need the API key. `sync-all-players` is the one to use. |
@@ -202,6 +203,44 @@ On gameweeks 3 to 9 (100,007 pairs of players the model expected to play):
 - The model is only a little better than ranking players by their last five games (63% against 62% of pairs), ahead in 5 of 7 gameweeks.
 - These figures are a snapshot in [client/src/lib/reliability.js](client/src/lib/reliability.js). After more gameweeks or a model
   change, re-run the endpoint and copy `model.regulars.buckets` across. They ignore the transfer hit and treat each swap as one game.
+
+## What the model does and doesn't use
+
+Tested on gameweeks 6 to 9 with `GET /dataset/test/horizons` and a regression of points on form, fixture difficulty and venue
+for regular players:
+
+- **It barely reacts to fixture difficulty.** Holding recent form fixed, a step harder on FPL's 1 to 5 scale really cost about
+  0.4 points (0.37 to 0.46 whichever earlier gameweeks it was measured on), but the model's predictions move about 0.06. It is
+  close to a form predictor with a little extra, which is why a plain "average of the last five games" rule keeps up with it.
+- **Forecasting further ahead costs accuracy.** The higher-rated player of a same-position pair really scored more in about
+  63% of pairs one gameweek ahead, 58% two ahead and 61% three ahead, and the model's edge over the last-five-games rule
+  disappears beyond one gameweek. Predicted gaps also overstate real ones more (slope 0.76, then 0.50 and 0.66).
+- **So the model now gets a fixture-difficulty correction** ([python/services/difficulty_head.py](python/services/difficulty_head.py)).
+  The home/away and difficulty columns are back in the regressor, and the forest's output is adjusted by
+  `P(play) × (level + slope × (difficulty − mean))`, with level and slope fitted to the forest's errors on gameweeks it had
+  not seen. Scaling by the chance of playing matters: a flat correction also moved players who won't play and made the point
+  error worse. On gameweeks 6 to 9 (one, two, three gameweeks ahead) pair wins went from 62.8 / 58.9 / 58.1% to 63.5 / 60.0 /
+  58.7%, the difficulty effect from −0.07 to about −0.50 (real: −0.41), and one-gameweek MAE from 1.171 to 1.139. Re-running
+  the decision backtest moved its buckets by about a point, so the reliability table is unchanged.
+- About ten variants were tried on those same few gameweeks (extra columns alone, a gradient-boosted model, a difficulty
+  slope alone, with and without the level shift), so the gains are indications, not proof.
+
+These are a handful of gameweeks, so treat the differences as indications. Re-run the endpoints as the season goes on.
+
+## Looking several gameweeks ahead
+
+The page has a "Look ahead" choice of the next gameweek, 3 or 5. Each later gameweek is predicted from the same features as
+today, but with form and team form as of the coming gameweek and the later gameweek's own fixture. The totals are what swaps
+are judged on, with the smallest gain worth showing scaled by the square root of the number of gameweeks.
+
+What to keep in mind:
+
+- The accuracy figures above are for one gameweek ahead. Further out the model is only about as good as recent form plus
+  the fixtures, so the page hides the "right N% of the time" labels for these views and says so. There is no track record for
+  the totals.
+- Injury news only exists for the coming gameweek. Later gameweeks are priced as if the player is fit, so a long-term
+  injury is flattered in a longer view; check the flags.
+- A double gameweek the model hasn't seen is scaled by the number of fixtures, in later gameweeks too.
 
 ## Keeping the model honest
 

@@ -2,14 +2,14 @@ import { useCallback, useEffect, useState } from "react"
 import { loadAll } from "../lib/api"
 
 // Loads everything the page needs, and again on demand
-export const useDashboard = () => {
+export const useDashboard = (horizon = 1) => {
     const [state, setState] = useState({ status: "loading", error: null, data: null })
     const [attempt, setAttempt] = useState(0)
 
     useEffect(() => {
         const controller = new AbortController()
 
-        loadAll({ signal: controller.signal })
+        loadAll({ signal: controller.signal, horizon })
             .then((data) => setState({ status: "ready", error: null, data }))
             .catch((error) => {
                 // Navigating away cancels the request; that isn't an error to show
@@ -19,7 +19,7 @@ export const useDashboard = () => {
             })
 
         return () => controller.abort()
-    }, [attempt])
+    }, [attempt, horizon])
 
     const reload = useCallback(() => {
         setState((current) => ({ ...current, status: "loading", error: null }))

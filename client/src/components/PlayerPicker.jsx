@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import AppearanceBar from "./AppearanceBar"
 import FixtureRun from "./FixtureRun"
-import FlagBadge from "./FlagBadge"
+import PlayerCell from "./PlayerCell"
 import { getFlag } from "../lib/flags"
 import { filterAndSort, pointsPerMillion } from "../lib/picker"
 import { points, pounds } from "../lib/format"
@@ -13,7 +13,7 @@ const COLUMNS = [
     { key: "name", label: "Player" },
     { key: "price", label: "Price", numeric: true },
     { key: "expected_points", label: "Exp pts", numeric: true },
-    { key: "appearance", label: "Chance of playing" },
+    { key: "appearance", label: "Playing %" },
     { key: "value", label: "Pts / £m", numeric: true },
 ]
 
@@ -126,9 +126,7 @@ const PlayerPicker = ({ players, teams, ownedIds }) => {
                                     {rows.slice(0, shown).map((player) => (
                                         <tr key={player.playerId}>
                                             <th scope="row">
-                                                <span className="player-name">{player.name}</span>
-                                                <span className="muted"> {teamNames.get(player.team) ?? ""} · {POSITION_SHORT[player.position]}</span>
-                                                <FlagBadge flag={getFlag(player)} />
+                                                <PlayerCell player={player} flag={getFlag(player)} teamNames={teamNames} />
                                             </th>
                                             <td className="num">{pounds(player.price)}</td>
                                             <td className="num">{points(player.expected_points)}</td>

@@ -94,6 +94,25 @@ describe("Home", () => {
         expect(pickerRows()).toContain("Haaland")
     })
 
+    it("shows your bench as its own section after the starters", async () => {
+        const withBench = [
+            ownedPlayer({ playerId: 1, webName: "Raya", elementType: 1, team: 1, position: 1, sellPrice: 6.1 }),
+            ownedPlayer({ playerId: 3, webName: "Jackson", elementType: 4, team: 2, position: 10, sellPrice: 6.9 }),
+            ownedPlayer({ playerId: 12, webName: "Saka", elementType: 3, team: 1, position: 14, sellPrice: 10.5, status: "i" }),
+        ]
+        respond({ team: { body: myTeam(withBench) } })
+        render(<Home />)
+
+        const team = await screen.findByRole("region", { name: "My Team" })
+        const captions = within(team).getAllByRole("table").map((table) => table.querySelector("caption").textContent.split(" · ")[0])
+
+        expect(captions).toEqual(["Goalkeepers", "Forwards", "Bench"])
+        const bench = within(team).getAllByRole("table").at(-1)
+        expect(within(bench).getByText("Saka")).toBeInTheDocument()
+        // The bench player is no longer listed with the midfielders: there is no midfield section at all
+        expect(within(team).queryByText("Midfielders")).not.toBeInTheDocument()
+    })
+
     it("recommends replacing the injured player first, with the best affordable option", async () => {
         respond()
         render(<Home />)

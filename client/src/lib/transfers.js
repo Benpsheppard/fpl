@@ -15,7 +15,7 @@ const tenths = (millions) => Math.round(millions * 10)
 // Squad slots 12-15 are the bench. Their points don't count unless an auto-sub brings them on.
 export const FIRST_BENCH_SLOT = 12
 
-const isBench = (player) => player.slot >= FIRST_BENCH_SLOT
+export const isBench = (player) => player.slot >= FIRST_BENCH_SLOT
 
 // squad: owned players { playerId, elementType, team, slot, sellPrice, expected_points, flag }
 // candidates: players you don't own (/predict rows)

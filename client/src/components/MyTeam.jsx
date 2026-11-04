@@ -1,14 +1,60 @@
 import AppearanceBar from "./AppearanceBar"
 import FixtureRun from "./FixtureRun"
-import FlagBadge from "./FlagBadge"
-import { groupByPosition, POSITION_SHORT } from "../lib/squad"
+import PlayerCell from "./PlayerCell"
+import { groupByPosition, splitStartersAndBench } from "../lib/squad"
 import { points, pounds, signed } from "../lib/format"
-import { FIRST_BENCH_SLOT } from "../lib/transfers"
 
 const MAX_FREE_TRANSFERS = 5
 
+const SquadTable = ({ title, note, players, teamNames, clubs, bestSwaps }) => (
+    <div className="table-scroll">
+        <table className="squad-table">
+            <caption>
+                {title}
+                {note && <span className="caption-note"> · {note}</span>}
+            </caption>
+            <thead>
+                <tr>
+                    <th scope="col">Player</th>
+                    <th scope="col" className="num">Exp pts</th>
+                    <th scope="col">Playing %</th>
+                    <th scope="col" className="num">Sell</th>
+                    <th scope="col">Next 5 gameweeks</th>
+                    <th scope="col">Suggested swap</th>
+                </tr>
+            </thead>
+            <tbody>
+                {players.map((player) => {
+                    const swap = bestSwaps.get(player.playerId)
+
+                    return (
+                        <tr key={player.playerId} className={swap?.priority ? "row-priority" : undefined}>
+                            <th scope="row">
+                                <PlayerCell player={player} flag={player.flag} teamNames={teamNames} />
+                            </th>
+                            <td className="num">{points(player.expected_points)}</td>
+                            <td><AppearanceBar probability={player.appearance_probability} /></td>
+                            <td className="num">{pounds(player.sellPrice)}</td>
+                            <td><FixtureRun run={player.upcoming_fixtures} clubs={clubs} /></td>
+                            <td>
+                                {swap
+                                    ? <span className="swap-hint">
+                                        → {swap.in.name} <strong>{signed(swap.netGain)}</strong>
+                                      </span>
+                                    : <span className="muted">Keep</span>}
+                            </td>
+                        </tr>
+                    )
+                })}
+            </tbody>
+        </table>
+    </div>
+)
+
 const MyTeam = ({ team, squad, teamNames, clubs, bestSwaps, freeTransfers, onFreeTransfersChange }) => {
     const pending = team.pendingTransfers.applied
+    const { starters, bench } = splitStartersAndBench(squad)
+    const tableProps = { teamNames, clubs, bestSwaps }
 
     return (
         <section className="panel" aria-labelledby="my-team-title">
@@ -51,52 +97,18 @@ const MyTeam = ({ team, squad, teamNames, clubs, bestSwaps, freeTransfers, onFre
                 </p>
             )}
 
-            {groupByPosition(squad).map((group) => (
-                <div key={group.elementType} className="table-scroll">
-                    <table className="squad-table">
-                        <caption>{group.name}</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col">Player</th>
-                                <th scope="col" className="num">Exp pts</th>
-                                <th scope="col">Chance of playing</th>
-                                <th scope="col" className="num">Sell</th>
-                                <th scope="col">Next 5 gameweeks</th>
-                                <th scope="col">Suggested swap</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {group.players.map((player) => {
-                                const swap = bestSwaps.get(player.playerId)
-
-                                return (
-                                    <tr key={player.playerId} className={swap?.priority ? "row-priority" : undefined}>
-                                        <th scope="row">
-                                            <span className="player-name">{player.name}</span>
-                                            {player.isCaptain && <abbr className="armband" title="Captain">C</abbr>}
-                                            {player.isViceCaptain && <abbr className="armband" title="Vice-captain">V</abbr>}
-                                            <span className="muted"> {teamNames.get(player.team) ?? ""} · {POSITION_SHORT[player.elementType]}</span>
-                                            {player.slot >= FIRST_BENCH_SLOT && <span className="bench" title="On the bench: their points only count if they are subbed on">Bench</span>}
-                                            <FlagBadge flag={player.flag} />
-                                        </th>
-                                        <td className="num">{points(player.expected_points)}</td>
-                                        <td><AppearanceBar probability={player.appearance_probability} /></td>
-                                        <td className="num">{pounds(player.sellPrice)}</td>
-                                        <td><FixtureRun run={player.upcoming_fixtures} clubs={clubs} /></td>
-                                        <td>
-                                            {swap
-                                                ? <span className="swap-hint">
-                                                    → {swap.in.name} <strong>{signed(swap.netGain)}</strong>
-                                                  </span>
-                                                : <span className="muted">Keep</span>}
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+            {groupByPosition(starters).map((group) => (
+                <SquadTable key={group.elementType} title={group.name} players={group.players} {...tableProps} />
             ))}
+
+            {bench.length > 0 && (
+                <SquadTable
+                    title="Bench"
+                    note="in substitution order; their points only count if they are subbed on"
+                    players={bench}
+                    {...tableProps}
+                />
+            )}
         </section>
     )
 }

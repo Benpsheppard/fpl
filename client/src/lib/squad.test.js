@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { groupByPosition, joinSquad } from "./squad"
+import { groupByPosition, joinSquad, splitStartersAndBench } from "./squad"
 import { myTeam, ownedPlayer, prediction, withAvailability } from "../test/fixtures"
 
 describe("joinSquad", () => {
@@ -79,5 +79,64 @@ describe("groupByPosition", () => {
 
     it("leaves out positions nobody plays", () => {
         expect(groupByPosition([{ playerId: 1, elementType: 1 }]).map((group) => group.elementType)).toEqual([1])
+    })
+})
+
+
+describe("splitStartersAndBench", () => {
+    const player = (playerId, slot, elementType = 3) => ({ playerId, slot, elementType })
+    const ids = (list) => list.map((p) => p.playerId)
+
+    it("puts slots 1-11 in the starting XI and 12-15 on the bench", () => {
+        const players = Array.from({ length: 15 }, (_, i) => player(i + 1, i + 1))
+
+        const { starters, bench } = splitStartersAndBench(players)
+
+        expect(starters).toHaveLength(11)
+        expect(ids(bench)).toEqual([12, 13, 14, 15])
+    })
+
+    it("draws the line between slot 11 and slot 12", () => {
+        const { starters, bench } = splitStartersAndBench([player(1, 11), player(2, 12)])
+
+        expect(ids(starters)).toEqual([1])
+        expect(ids(bench)).toEqual([2])
+    })
+
+    it("keeps the bench together whatever the positions are", () => {
+        const { bench } = splitStartersAndBench([player(1, 12, 1), player(2, 13, 2), player(3, 14, 3), player(4, 15, 4)])
+
+        expect(bench.map((p) => p.elementType)).toEqual([1, 2, 3, 4])
+    })
+
+    it("lists the bench in substitution order, however it arrives", () => {
+        const { bench } = splitStartersAndBench([player(1, 15), player(2, 12), player(3, 14), player(4, 13)])
+
+        expect(ids(bench)).toEqual([2, 4, 3, 1])
+    })
+
+    it("leaves the starters in the order given", () => {
+        const { starters } = splitStartersAndBench([player(1, 9), player(2, 2), player(3, 5)])
+
+        expect(ids(starters)).toEqual([1, 2, 3])
+    })
+
+    it("puts everyone in the starting XI when there is no slot information, rather than guessing", () => {
+        const { starters, bench } = splitStartersAndBench([player(1, undefined), player(2, null)])
+
+        expect(starters).toHaveLength(2)
+        expect(bench).toEqual([])
+    })
+
+    it("handles an empty squad", () => {
+        expect(splitStartersAndBench([])).toEqual({ starters: [], bench: [] })
+    })
+
+    it("does not reorder the list it is given", () => {
+        const players = [player(1, 15), player(2, 12)]
+
+        splitStartersAndBench(players)
+
+        expect(ids(players)).toEqual([1, 2])
     })
 })

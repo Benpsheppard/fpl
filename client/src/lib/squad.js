@@ -1,6 +1,7 @@
 // squad.js
 
 import { getFlag } from "./flags"
+import { isBench } from "./transfers"
 
 const POSITION_ORDER = [1, 2, 3, 4]
 
@@ -41,3 +42,11 @@ export const groupByPosition = (players) => POSITION_ORDER
         players: players.filter((player) => player.elementType === elementType),
     }))
     .filter((group) => group.players.length > 0)
+
+// The starting XI and the bench, which is shown separately whatever positions are on it.
+// The bench is in substitution order (slot 12 comes on first). With no slot information
+// nobody is on the bench, rather than guessing.
+export const splitStartersAndBench = (players) => ({
+    starters: players.filter((player) => !isBench(player)),
+    bench: players.filter(isBench).sort((a, b) => a.slot - b.slot),
+})

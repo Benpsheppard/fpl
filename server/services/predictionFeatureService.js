@@ -209,6 +209,8 @@ const buildPredictionPayload = ({ player, playerGameweeks, seasons, fixtures, fi
                 firstName: player.firstName,
                 secondName: player.secondName,
                 webName: player.webName,
+                // FPL's injury or availability note, e.g. "Knee injury - 75% chance of playing"
+                news: player.news || "",
                 team: player.team,
                 elementType: player.elementType,
                 // FPL stores price in tenths of a million

@@ -205,6 +205,8 @@ def build_prediction(bundle, payload, features_row, result):
         "team": name.get("team"),
         "position": name.get("elementType"),
         "price": name.get("price"),
+        # FPL's note on injuries and availability, shown next to a flagged player
+        "news": name.get("news") or "",
         "gameweek": int(result["gameweek"]),
 
         # What to rank by: the model's figure, adjusted for a double gameweek and for injury news

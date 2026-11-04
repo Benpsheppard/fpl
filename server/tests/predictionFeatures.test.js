@@ -17,7 +17,7 @@ const query = (rows) => {
 
 const future = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
 
-const player = { fplId: 1, firstName: "Bukayo", secondName: "Saka", webName: "Saka", nowCost: 105, team: 10, removed: false, elementType: 3, status: "a", chanceOfPlayingThisRound: 100, chanceOfPlayingNextRound: 100 }
+const player = { fplId: 1, firstName: "Bukayo", secondName: "Saka", webName: "Saka", news: "Knock - 75% chance of playing", nowCost: 105, team: 10, removed: false, elementType: 3, status: "a", chanceOfPlayingThisRound: 100, chanceOfPlayingNextRound: 100 }
 
 const finished = (fplId, gameweek, homeTeam, awayTeam, homeScore, awayScore) => ({
     fplId, gameweek, homeTeam, awayTeam, homeScore, awayScore,
@@ -130,7 +130,7 @@ test("live status information is kept out of the model features", async () => {
     const result = await withStubs(data(), () => getPredictionFeatures(1))
 
     // Price is stored in tenths of a million
-    assert.deepEqual(result.context.player, { firstName: "Bukayo", secondName: "Saka", webName: "Saka", team: 10, elementType: 3, price: 10.5 })
+    assert.deepEqual(result.context.player, { firstName: "Bukayo", secondName: "Saka", webName: "Saka", news: "Knock - 75% chance of playing", team: 10, elementType: 3, price: 10.5 })
     assert.equal(result.context.status, "a")
     assert.ok(result.context.fixtureLookahead)
     assert.equal(JSON.stringify(result.features).includes("chanceOfPlaying"), false)

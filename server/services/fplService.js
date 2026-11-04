@@ -37,6 +37,13 @@ const getManagerGameweek = async (managerId, gameweek) => {
     return response.data
 }
 
+// Get every transfer a manager has made, including ones for the coming gameweek
+const getManagerTransfers = async (managerId) => {
+    const response = await getWithRetry(`${FPL_API_URL}/entry/${managerId}/transfers/`)
+
+    return response.data
+}
+
 // Get player gameweek data
 const getPlayerGameweek = async (playerId) => {
     const response = await getWithRetry(`${FPL_API_URL}/element-summary/${playerId}`)
@@ -75,6 +82,7 @@ module.exports = {
     getFixtures,
     getManager,
     getManagerGameweek,
+    getManagerTransfers,
     getPlayerGameweek,
     getAllPlayersGameweek
 }

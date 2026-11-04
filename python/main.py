@@ -7,6 +7,7 @@ import os
 import threading
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 
 # Services
@@ -56,6 +57,17 @@ app = FastAPI(
     title="FPL Prediciton API",
     description="Machine learning service for FPL Predictions",
     version="1.0.0"
+)
+
+# The browser app calls /predict directly. Only GET is allowed cross-origin, so a web page
+# can read predictions but can never reach /model/train.
+DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS).split(",") if origin.strip()],
+    allow_methods=["GET"],
+    allow_headers=[],
 )
 
 # Routes

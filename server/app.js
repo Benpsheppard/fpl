@@ -12,6 +12,8 @@ const { fplRouter } = require("./routes/fplRoutes")
 const { playerRouter } = require("./routes/playerRoutes.js")
 const { predictionFeatureRouter } = require("./routes/predictionFeatureRoutes.js")
 const { trainingDatasetRouter } = require("./routes/trainingDatasetRoutes.js")
+const { myTeamRouter } = require("./routes/myTeamRoutes.js")
+const { teamRouter } = require("./routes/teamRoutes.js")
 
 const { requireApiKeyForWrites } = require("./middleware/requireApiKey")
 const { notFound, errorHandler } = require("./middleware/errorHandler")
@@ -58,6 +60,8 @@ const createApp = ({ readLimit = 300, writeLimit = 10 } = {}) => {
     app.use("/api/players", playerRouter)
     app.use("/api/prediction", predictionFeatureRouter)
     app.use("/api/training", trainingDatasetRouter)
+    app.use("/api/my-team", myTeamRouter)
+    app.use("/api/teams", teamRouter)
 
     app.use(notFound)
     app.use(errorHandler)

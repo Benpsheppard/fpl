@@ -10,6 +10,7 @@
     --good-bg: #e3f4eb;
     --warn: #8a5a00;
     --warn-bg: #fff3d6;
+    --warn-border: #c28000;
     --bad: #b42318;
     --bad-bg: #fde8e6;
     --info: #1f5fa8;
@@ -32,6 +33,7 @@
         --good-bg: #16352a;
         --warn: #f1c46b;
         --warn-bg: #3a2f14;
+        --warn-border: #e0a93a;
         --bad: #ff8f85;
         --bad-bg: #3d1f1c;
         --info: #8bbcf2;
@@ -243,3 +245,16 @@ tbody th { font-weight: 400; }
 .swap-side .fixture-run { flex-basis: 100%; flex-wrap: wrap; margin-left: 2.4rem; }
 
 .caption-note { font-weight: 400; color: var(--muted); font-size: 0.85em; }
+
+/* How often a swap this size has come off: green when strong, plain when good, amber (and a dashed, muted box) when weak */
+.reliability { font-size: 0.8rem; }
+.reliability-strong { color: var(--good); }
+.reliability-good { color: var(--muted); }
+.reliability-weak { color: var(--warn); }
+/* The outline says it at a glance: solid green when a swap has come off 60% of the time or more, dashed amber
+   when it hasn't. These come after .swap-priority, so a swap for an injured player keeps its red fill but takes
+   its outline from how reliable it is. */
+.swap-good, .swap-strong { border: 2px solid var(--good); }
+.swap-weak { border: 2px dashed var(--warn-border); }
+.swap-weak .gain { color: var(--muted); }
+.swap-hint-weak strong { color: var(--muted); }

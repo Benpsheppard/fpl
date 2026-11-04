@@ -1,3 +1,4 @@
+import { BACKTEST } from "../lib/reliability"
 import { MIN_NET_GAIN } from "../lib/transfers"
 import TransferOption from "./TransferOption"
 
@@ -8,6 +9,10 @@ const TransferSuggestions = ({ swaps, teamNames, clubs, freeTransfers, limit = 8
             <p className="muted">
                 One transfer at a time, for next gameweek only.
                 {freeTransfers === 0 && " With no free transfer, each costs a 4-point hit."}
+            </p>
+            <p className="muted">
+                "Right N% of the time" is how often a gap that size came off in past gameweeks ({BACKTEST.gameweeks}):
+                the higher-rated player really scored more. Under 60% is close to a coin flip.
             </p>
         </header>
 

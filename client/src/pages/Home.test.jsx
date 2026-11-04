@@ -198,6 +198,20 @@ describe("Home", () => {
         })
     })
 
+    it("labels each suggested transfer with how often a swap that size has come off", async () => {
+        respond()
+        render(<Home />)
+
+        const swaps = await screen.findByRole("region", { name: "Best transfers" })
+        const items = within(swaps).getAllByRole("listitem").filter((item) => item.classList.contains("swap"))
+
+        // Saka (0 pts) to Rice (4.8 pts) is a gap of 4.8, the most reliable kind
+        expect(within(items[0]).getByText("right 78% of the time")).toHaveClass("reliability-strong")
+        for (const item of items) {
+            expect(item.querySelector(".reliability")).not.toBeNull()
+        }
+    })
+
     it("does not recommend buying the injured player", async () => {
         respond()
         render(<Home />)

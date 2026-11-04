@@ -1,10 +1,25 @@
 import AppearanceBar from "./AppearanceBar"
 import FixtureRun from "./FixtureRun"
 import PlayerCell from "./PlayerCell"
+import { reliabilityForGap } from "../lib/reliability"
 import { groupByPosition, splitStartersAndBench } from "../lib/squad"
 import { points, pounds, signed } from "../lib/format"
 
 const MAX_FREE_TRANSFERS = 5
+
+// The suggested replacement for one player. A swap that has rarely come off is shown in a muted colour.
+const SwapHint = ({ swap }) => {
+    const reliability = reliabilityForGap(swap.gain)
+
+    return (
+        <span
+            className={`swap-hint${reliability?.level === "weak" ? " swap-hint-weak" : ""}`}
+            title={reliability ? `${reliability.label}. ${reliability.detail}` : undefined}
+        >
+            → {swap.in.name} <strong>{signed(swap.netGain)}</strong>
+        </span>
+    )
+}
 
 const SquadTable = ({ title, note, players, teamNames, clubs, bestSwaps }) => (
     <div className="table-scroll">
@@ -47,9 +62,7 @@ const SquadTable = ({ title, note, players, teamNames, clubs, bestSwaps }) => (
                             <td><FixtureRun run={player.upcoming_fixtures} clubs={clubs} /></td>
                             <td>
                                 {swap
-                                    ? <span className="swap-hint">
-                                        → {swap.in.name} <strong>{signed(swap.netGain)}</strong>
-                                      </span>
+                                    ? <SwapHint swap={swap} />
                                     : <span className="muted">Keep</span>}
                             </td>
                         </tr>

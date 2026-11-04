@@ -372,6 +372,118 @@ describe("TransferSuggestions", () => {
         expect(screen.getByText(/each costs a 4-point hit/)).toBeInTheDocument()
     })
 
+    describe("how reliable each swap is", () => {
+        // One swap, with the sold player worth `owned` points and the bought player `candidate`, so the predicted gap is the difference
+        const swapOf = ({ owned: ownedPoints, candidate: candidatePoints, freeTransfers = 1, flag }) => {
+            const squad = joinSquad(
+                myTeam([ownedPlayer({ playerId: 12, webName: "Seller", elementType: 3, team: 1, sellPrice: 8 })]),
+                [prediction({ playerId: 12, name: "Seller", position: 3, expected_points: ownedPoints })],
+            )
+            if (flag) squad[0].flag = flag
+            const candidates = [prediction({ playerId: 20, name: "Buyer", position: 3, team: 1, price: 7, expected_points: candidatePoints })]
+
+            return suggestSwaps({ squad, candidates, bank: 0, freeTransfers, minNetGain: 0 })
+        }
+
+        const renderSwaps = (swaps, freeTransfers = 1) => render(<TransferSuggestions swaps={swaps} teamNames={names} freeTransfers={freeTransfers} />)
+        const itemOf = (container) => container.querySelector(".swap")
+
+        it("tells you how often a swap this size has come off", () => {
+            const { container } = renderSwaps(swapOf({ owned: 3, candidate: 5.2 })) // a gap of 2.2
+
+            const label = within(itemOf(container)).getByText("right 74% of the time")
+            expect(label).toHaveClass("reliability-strong")
+        })
+
+        it("gives each reliability its own outline class, and only one", () => {
+            const classesFor = (owned, candidate) => {
+                const { container, unmount } = renderSwaps(swapOf({ owned, candidate }))
+                const found = ["swap-weak", "swap-good", "swap-strong"].filter((name) => itemOf(container).classList.contains(name))
+                unmount()
+
+                return found
+            }
+
+            expect(classesFor(4, 4.7)).toEqual(["swap-weak"]) // a gap of 0.7: 59%
+            expect(classesFor(3, 4.4)).toEqual(["swap-good"]) // a gap of 1.4: 65%
+            expect(classesFor(3, 5.2)).toEqual(["swap-strong"]) // a gap of 2.2: 74%
+        })
+
+        it("shades a weak swap, labels it in amber, and leaves it in the list", () => {
+            const { container } = renderSwaps(swapOf({ owned: 4, candidate: 4.7 })) // a gap of 0.7
+
+            expect(itemOf(container)).toHaveClass("swap-weak")
+            expect(within(itemOf(container)).getByText("right 59% of the time")).toHaveClass("reliability-weak")
+        })
+
+        it("does not shade a swap that has usually come off", () => {
+            const { container } = renderSwaps(swapOf({ owned: 3, candidate: 4.4 })) // a gap of 1.4
+
+            expect(itemOf(container)).not.toHaveClass("swap-weak")
+            expect(itemOf(container)).toHaveClass("swap-good")
+            expect(within(itemOf(container)).getByText("right 65% of the time")).toHaveClass("reliability-good")
+        })
+
+        it("explains the number in a tooltip", () => {
+            const { container } = renderSwaps(swapOf({ owned: 3, candidate: 4.4 }))
+
+            expect(within(itemOf(container)).getByText("right 65% of the time")).toHaveAttribute(
+                "title",
+                expect.stringContaining("18,099 past same-position pairs"),
+            )
+        })
+
+        it("judges a swap by the gap between the two players, not by the gain after a transfer hit", () => {
+            // A gap of 5 (78%), with no free transfer so a 4-point hit leaves +1.0
+            const { container } = renderSwaps(swapOf({ owned: 0, candidate: 5, freeTransfers: 0 }), 0)
+
+            expect(within(itemOf(container)).getByText("+1.0 pts")).toBeInTheDocument()
+            expect(within(itemOf(container)).getByText("right 78% of the time")).toBeInTheDocument()
+        })
+
+        it("still marks a swap for an injured player as urgent, whatever its reliability", () => {
+            const { container } = renderSwaps(swapOf({ owned: 4, candidate: 4.7, flag: { level: "out", label: "Out", detail: "" } }))
+
+            expect(itemOf(container)).toHaveClass("swap-priority")
+            expect(itemOf(container)).toHaveClass("swap-weak")
+        })
+
+        it("gives a swap no reliability outline when the gap isn't a usable number", () => {
+            const [swap] = swapOf({ owned: 3, candidate: 5 })
+
+            const { container } = renderSwaps([{ ...swap, gain: NaN }])
+
+            for (const name of ["swap-weak", "swap-good", "swap-strong"]) {
+                expect(itemOf(container)).not.toHaveClass(name)
+            }
+        })
+
+        it("shows no label when the gap isn't a usable number, rather than a wrong one", () => {
+            const [swap] = swapOf({ owned: 3, candidate: 5 })
+
+            const { container } = renderSwaps([{ ...swap, gain: NaN }])
+
+            expect(container.querySelector(".reliability")).toBeNull()
+            expect(itemOf(container)).not.toHaveClass("swap-weak")
+        })
+
+        it("says once, in the panel, what the label means", () => {
+            renderSwaps(swapOf({ owned: 3, candidate: 5 }))
+
+            expect(screen.getByText(/Right N% of the time/)).toBeInTheDocument()
+            expect(screen.getByText(/past gameweeks \(3 to 9\)/)).toBeInTheDocument()
+            expect(screen.getByText(/Under 60% is close to a coin flip/)).toBeInTheDocument()
+        })
+
+        it("labels every swap in the list", () => {
+            const swaps = [swapOf({ owned: 3, candidate: 5 })[0], swapOf({ owned: 4, candidate: 4.7 })[0]]
+
+            const { container } = renderSwaps(swaps)
+
+            expect(container.querySelectorAll(".reliability")).toHaveLength(2)
+        })
+    })
+
     it("explains when no swap is worth making", () => {
         render(<TransferSuggestions swaps={[]} teamNames={names} freeTransfers={1} />)
 
@@ -517,6 +629,37 @@ describe("MyTeam", () => {
 
         expect(screen.getByText(/→ Rice/)).toBeInTheDocument()
         expect(screen.getAllByText("Keep")).toHaveLength(2)
+    })
+
+    describe("the suggested swap shown beside a player", () => {
+        const withSwap = (gain) => {
+            const team = myTeam([ownedPlayer({ playerId: 5, webName: "Owned", elementType: 3, team: 1 })])
+            const squad = joinSquad(team, [prediction({ playerId: 5, name: "Owned", position: 3 })])
+            const swap = { in: { name: "Better" }, gain, netGain: gain, priority: false }
+
+            return render(<MyTeam team={team} squad={squad} teamNames={names} clubs={clubsMap()} bestSwaps={new Map([[5, swap]])} freeTransfers={1} onFreeTransfersChange={() => {}} />)
+        }
+
+        it("is muted when swaps this size have rarely come off", () => {
+            const { container } = withSwap(0.7)
+
+            expect(container.querySelector(".swap-hint")).toHaveClass("swap-hint-weak")
+            expect(container.querySelector(".swap-hint")).toHaveAttribute("title", expect.stringContaining("right 59% of the time"))
+        })
+
+        it("is not muted when they usually have", () => {
+            const { container } = withSwap(2.2)
+
+            expect(container.querySelector(".swap-hint")).not.toHaveClass("swap-hint-weak")
+            expect(container.querySelector(".swap-hint")).toHaveAttribute("title", expect.stringContaining("right 74% of the time"))
+        })
+
+        it("still names the replacement and the gain", () => {
+            withSwap(2.2)
+
+            expect(screen.getByText(/→ Better/)).toBeInTheDocument()
+            expect(screen.getByText("+2.2")).toBeInTheDocument()
+        })
     })
 
     it("mentions pending transfers and a chip", () => {

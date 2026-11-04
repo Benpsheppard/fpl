@@ -127,7 +127,8 @@ Reads are limited to 300 requests a minute and writes to 10. Ids must be plain i
 - **Best transfers.** For each player you own, the best replacement you can afford: same position, no more than three from a
   club, within the player's *sell price* plus your bank. Ranked by expected points gained, minus 4 if you have no free
   transfer. Swaps that gain less than 0.5 points are left out, because that is within the model's typical error (about 1.2).
-  Swaps for a player who is out of action come first. A bench player is worth only what the new player would add by taking a starting place, and each player to buy is listed once.
+  Each swap says how often a gap that size has come off in past gameweeks (see [How far to trust a swap](#how-far-to-trust-a-swap));
+  weak ones are shaded rather than hidden. Swaps for a player who is out of action come first. A bench player is worth only what the new player would add by taking a starting place, and each player to buy is listed once.
 - **Your team.** Loaded from the FPL website for the manager in `MY_FPL_MANAGER_ID`, with exact sell prices worked out from your
   transfer history. Set *free transfers* by hand: FPL does not publish them.
 - **Players you could buy.** Everyone you don't already own, with filters (position, club, max price, name, hide injured, hide
@@ -182,6 +183,25 @@ starts, the "this round" figure once it is under way. For a later gameweek there
 is adjusted. With no percentage, an available player counts as 1 and an injured, suspended or unavailable player as 0. A
 doubtful player with no percentage is left unadjusted rather than guessed. Weighting by the chance slightly double-counts
 for players the model already expects to miss minutes, so treat `expected_points` as a ranking aid, not a forecast.
+
+## How far to trust a swap
+
+The advice is a comparison ("sell A, buy B, +1.6 points"), so what matters is whether the player the model rates higher really
+scores more. `GET :8001/dataset/test/backtest` checks that on past gameweeks: for each one, with the model trained only on
+earlier ones, it takes every pair of regular players in the same position and compares the predicted gap with what happened.
+On gameweeks 3 to 9 (100,007 pairs of players the model expected to play):
+
+| Predicted gap | Under 0.25 | 0.25 to 0.5 | 0.5 to 1 | 1 to 1.5 | 1.5 to 2 | 2 to 3 | 3 or more |
+|---|---|---|---|---|---|---|---|
+| Higher-rated player really scored more | 52% | 55% | 59% | 65% | 71% | 74% | 78% |
+
+- A swap worth under about 1 point is close to a coin flip. That is why the app labels each swap with this figure and shades the
+  weak ones (under 60%) instead of presenting every "+0.6" as a firm recommendation.
+- The model's predicted gaps are about 30% too big: real gaps averaged around 70% of predicted (a slope of 0.69), and the very
+  largest predicted gaps shrink the most.
+- The model is only a little better than ranking players by their last five games (63% against 62% of pairs), ahead in 5 of 7 gameweeks.
+- These figures are a snapshot in [client/src/lib/reliability.js](client/src/lib/reliability.js). After more gameweeks or a model
+  change, re-run the endpoint and copy `model.regulars.buckets` across. They ignore the transfer hit and treat each swap as one game.
 
 ## Keeping the model honest
 

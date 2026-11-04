@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { DIFFICULTY_SCALE, describeFixture, difficultyLevel, fixtureCells } from "./fixtures"
+import { contrast } from "../test/colour"
 import { clubsMap, fixtureRun } from "../test/fixtures"
 
 describe("difficultyLevel", () => {
@@ -106,19 +107,6 @@ describe("fixture colours in the stylesheet", () => {
             found[`${name}${background ?? ""}`] = value
         }
         return found
-    }
-
-    const luminance = (hex) => {
-        const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-            .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
-
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b
-    }
-
-    const contrast = (a, b) => {
-        const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x)
-
-        return (lighter + 0.05) / (darker + 0.05)
     }
 
     it.each(DIFFICULTY_SCALE.map(({ level }) => [level]))("has a style rule for the %s class", (level) => {

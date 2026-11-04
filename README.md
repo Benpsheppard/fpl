@@ -100,6 +100,7 @@ The model does not retrain on its own. Until you refresh, predictions use the la
 | `GET /predict/{player_id}` | Prediction for the player's next fixture. See [Reading a prediction](#reading-a-prediction). |
 | `GET /predict` | Every active player, best `expected_points` first. Filters: `position` (1 GK, 2 DEF, 3 MID, 4 FWD), `team`, `max_price` (in millions), `limit` (default 50). |
 | `GET /dataset/test/compare` | Single-stage vs two-stage on identical validation players, with a paired significance check. |
+| `GET /dataset/test/backtest` | Do the model's differences between players hold up? How often the higher-rated player of each same-position pair really scored more, by size of the gap. Takes about 15 seconds. |
 | `GET /dataset/test*` | Other validation experiments (single split, rolling, two-stage). Slow; they log metrics. |
 
 `/predict` returns 503 with no trained model, 404 for an unknown player, 502 if the data service is down, and 409 if the

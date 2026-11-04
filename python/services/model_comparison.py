@@ -21,7 +21,7 @@ MODELS = ["two_stage", "single_same_rows", "single_all_rows", "recent_form", "tr
 TOP_N = 20
 
 
-def _recent_form(dataframe):
+def recent_form(dataframe):
     """Points per gameweek over the last five: what you'd guess without a model."""
     played = dataframe["recent_last5Gameweeks_gameweeks"].replace(0, np.nan)
 
@@ -97,7 +97,7 @@ def compare_models(dataframe, start_gameweek=3, end_gameweek=None, bootstrap_sam
             "train_mean": np.full(len(index), float(fold["y_train"].mean())),
         }
         if has_form:
-            predictions["recent_form"] = _recent_form(dataframe.loc[index]).to_numpy()
+            predictions["recent_form"] = recent_form(dataframe.loc[index]).to_numpy()
 
         for model, predicted in predictions.items():
             scores = _score(y_validation, predicted)

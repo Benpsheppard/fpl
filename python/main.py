@@ -18,6 +18,7 @@ from services.dataset_loader import (
     DatasetLoadError,
     PlayerNotFoundError
 )
+from services.decision_backtest import backtest_decisions
 from services.model_comparison import compare_models, json_safe
 from services.two_stage_model import (
     predict_payloads,
@@ -362,3 +363,25 @@ def compare_single_and_two_stage(start_gameweek: int = 3, end_gameweek: int | No
         raise HTTPException(status_code=422, detail="No gameweeks had enough data to compare")
 
     return json_safe({**summary, "per_gameweek": per_gameweek.round(4).to_dict(orient="records")})
+
+
+@app.get("/dataset/test/backtest")
+def backtest_player_comparisons(
+    start_gameweek: int = 3,
+    end_gameweek: int | None = None,
+    target_accuracy: float = Query(default=0.6, gt=0.5, lt=1, description="How often the higher-rated player must really score more"),
+):
+    """Do the model's differences between players hold up? Compares every same-position pair, gameweek by gameweek."""
+    try:
+        dataset = load_training_dataset()
+    except DatasetLoadError as error:
+        raise HTTPException(status_code=502, detail=str(error))
+
+    dataframe = add_features(prepare_training_dataframe(dataset))
+
+    result = backtest_decisions(dataframe, start_gameweek, end_gameweek, target_accuracy)
+
+    if result["gameweeks"] == 0:
+        raise HTTPException(status_code=422, detail="No gameweeks had enough data to backtest")
+
+    return json_safe(result)

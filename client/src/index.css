@@ -71,8 +71,9 @@ code { background: var(--border); padding: 0.05rem 0.3rem; border-radius: 4px; f
 .page-header { margin-bottom: 1rem; }
 .page-header p { margin: 0.25rem 0 0; }
 
+/* One column: transfers, then your team, then the players to buy. Each panel gets the full width,
+   which the wide tables (fixtures, chance of playing) need; side by side they were cut off. */
 .layout { display: grid; gap: 1rem; grid-template-columns: 1fr; align-items: start; }
-@media (min-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 .column { display: grid; gap: 1rem; min-width: 0; }
 
 .panel {
@@ -123,8 +124,21 @@ tbody th { font-weight: 400; }
 /* A player in the squad list: name, then club and position, then any warning tag */
 .player-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; }
 .player-stack .flag { margin-left: 0; }
-/* However long a name is, it (and the club line) stays on one line; the column grows to fit */
-.player-stack > span { white-space: nowrap; }
+/* However long a name is, it (and the club line) stays on one line. In a fixed-width column a name
+   too long even for that is cut with an ellipsis (the full name is in its tooltip) rather than running
+   into the next column. */
+.player-stack { max-width: 100%; }
+.player-stack > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Every squad section is its own table, so give them all the same column widths or each would size itself
+   to its own contents and the columns would drift from one section to the next. The last column (the
+   suggested swap) takes the rest; below the minimum width the table scrolls instead of squashing. */
+.squad-table { table-layout: fixed; min-width: 1060px; }
+.squad-table .col-player { width: 190px; }
+.squad-table .col-points { width: 80px; }
+.squad-table .col-playing { width: 150px; }
+.squad-table .col-sell { width: 90px; }
+.squad-table .col-fixtures { width: 380px; }
 .armband { margin-left: 0.3rem; background: var(--text); color: var(--bg); border-radius: 50%; padding: 0 0.35rem; font-size: 0.75rem; text-decoration: none; }
 .row-priority { background: var(--bad-bg); }
 
@@ -145,7 +159,7 @@ tbody th { font-weight: 400; }
 .chance-low { background: var(--bad); }
 .chance-value { font-variant-numeric: tabular-nums; font-size: 0.85rem; min-width: 3ch; }
 
-.swap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.swap-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 36rem), 1fr)); gap: 0.5rem; }
 /* One box: the transfer (sell, buy) on the left and what it's worth on the right */
 .swap { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.5rem 1rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; }
 .swap-priority { border-color: var(--bad); background: var(--bad-bg); }

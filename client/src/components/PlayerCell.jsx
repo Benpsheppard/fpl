@@ -6,7 +6,7 @@ import { POSITION_SHORT } from "../lib/squad"
 const PlayerCell = ({ player, flag, teamNames }) => (
     <div className="player-stack">
         <span>
-            <span className="player-name">{player.name}</span>
+            <span className="player-name" title={player.name}>{player.name}</span>
             {player.isCaptain && <abbr className="armband" title="Captain">C</abbr>}
             {player.isViceCaptain && <abbr className="armband" title="Vice-captain">V</abbr>}
         </span>

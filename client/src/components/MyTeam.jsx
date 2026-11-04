@@ -13,6 +13,15 @@ const SquadTable = ({ title, note, players, teamNames, clubs, bestSwaps }) => (
                 {title}
                 {note && <span className="caption-note"> · {note}</span>}
             </caption>
+            {/* The same widths in every section (the position groups and the bench), so the columns line up down the page */}
+            <colgroup>
+                <col className="col-player" />
+                <col className="col-points" />
+                <col className="col-playing" />
+                <col className="col-sell" />
+                <col className="col-fixtures" />
+                <col />
+            </colgroup>
             <thead>
                 <tr>
                     <th scope="col">Player</th>

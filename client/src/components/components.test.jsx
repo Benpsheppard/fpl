@@ -617,6 +617,41 @@ describe("MyTeam", () => {
             expect(within(row).getByText(/→ Better/)).toBeInTheDocument()
         })
 
+        describe("column alignment", () => {
+            const colClasses = (table) => [...table.querySelectorAll("colgroup col")].map((col) => col.className)
+
+            it("declares the same columns in every section, so they line up down the page", () => {
+                renderSquad()
+
+                const all = tables().map(colClasses)
+
+                expect(all).toHaveLength(5) // four positions and the bench
+                for (const columns of all) {
+                    expect(columns).toEqual(all[0])
+                }
+            })
+
+            it("declares one column for each heading, because a missing one would shift every column after it", () => {
+                renderSquad()
+
+                for (const table of tables()) {
+                    expect(table.querySelectorAll("colgroup col")).toHaveLength(table.querySelectorAll("thead th").length)
+                }
+            })
+
+            it("names the fixed-width columns and leaves the last to take the rest", () => {
+                renderSquad()
+
+                expect(colClasses(tables()[0])).toEqual(["col-player", "col-points", "col-playing", "col-sell", "col-fixtures", ""])
+            })
+
+            it("gives the bench the same columns as the starters", () => {
+                renderSquad()
+
+                expect(colClasses(tables().at(-1))).toEqual(colClasses(tables()[0]))
+            })
+        })
+
         it("omits a position section whose players are all on the bench", () => {
             // The only goalkeeper is a substitute
             renderSquad([

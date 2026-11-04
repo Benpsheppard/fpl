@@ -352,6 +352,9 @@ const calculateTeamFeatures = (teamId, targetGameweek, fixtures, venue = "all", 
 //   seasons            the player's PlayerSeason rows
 //   fixtures           all Fixture rows (for team form)
 //   fixtureById        Map of fixture fplId to Fixture
+//   asOfGameweek       team form uses fixtures finished before this gameweek. It is the fixture's own
+//                      gameweek unless the forecast is made earlier (looking several gameweeks ahead),
+//                      when the form is as old as the forecast.
 const buildFeatureSet = ({
     player,
     teamId,
@@ -361,7 +364,8 @@ const buildFeatureSet = ({
     previousGameweeks,
     seasons,
     fixtures,
-    fixtureById
+    fixtureById,
+    asOfGameweek
 }) => {
     const lastGameweek = previousGameweeks.slice(-1)
     const last3Gameweeks = previousGameweeks.slice(-3)
@@ -386,7 +390,7 @@ const buildFeatureSet = ({
         }
     }).filter(Boolean)
 
-    const targetGameweek = fixture.gameweek
+    const targetGameweek = asOfGameweek ?? fixture.gameweek
 
     // The team's other fixtures in this gameweek, earliest first. A double gameweek
     // is two fixtures; the player's gameweek row sums points across both.

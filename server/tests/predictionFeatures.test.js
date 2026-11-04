@@ -448,3 +448,82 @@ describe("the fixture run", () => {
         assert.deepEqual(result.context.upcomingFixtures.fixtures.map((f) => f.gameweek), [5])
     })
 })
+
+// --- looking several gameweeks ahead ---------------------------------------------
+
+const longRun = () => {
+    const rows = data()
+    rows.fixtures.push(upcoming(106, 6, 70, 10, 17), upcoming(107, 7, 10, 80, 24))
+    return rows
+}
+
+test("by default there are no later rows", async () => {
+    const result = await withStubs(longRun(), () => getPredictionFeatures(1))
+    assert.equal(result.horizon, undefined)
+
+    const all = await withStubs(longRun(), () => getAllPredictionFeatures())
+    assert.equal(all.players[0].horizon, undefined)
+})
+
+test("a horizon adds a row for each later gameweek in the window, and no further", async () => {
+    const all = await withStubs(longRun(), () => getAllPredictionFeatures({ horizon: 3 }))
+    const { horizon } = all.players[0]
+
+    assert.equal(horizon.fromGameweek, 4)
+    assert.equal(horizon.toGameweek, 6)
+    assert.deepEqual(horizon.later.map((row) => row.gameweek), [5, 6])
+    assert.deepEqual(horizon.later.map((row) => row.features.fixtures.fixtureId), [105, 106])
+    // The usual next-gameweek row is unchanged
+    assert.equal(all.players[0].gameweek, 4)
+})
+
+test("a blank gameweek has no row, but still uses up a place in the window", async () => {
+    const rows = longRun()
+    rows.fixtures = rows.fixtures.filter((fixture) => fixture.fplId !== 105)
+
+    const { horizon } = (await withStubs(rows, () => getAllPredictionFeatures({ horizon: 3 }))).players[0]
+
+    assert.deepEqual(horizon.later.map((row) => row.gameweek), [6])
+})
+
+test("a later row is exactly what a training row looking that far ahead would be", async () => {
+    const rows = longRun()
+    const { horizon } = (await withStubs(rows, () => getAllPredictionFeatures({ horizon: 3 }))).players[0]
+
+    // Pretend gameweeks 4 to 6 have been played. The horizon-3 row for gameweek 6 is forecast from gameweek 4.
+    rows.gameweeks.push(played(4, 104, 50, false, 9), played(5, 105, 60, true, 3), played(6, 106, 70, false, 12))
+    rows.fixtures.filter((fixture) => fixture.gameweek <= 6).forEach((fixture) => { fixture.finished = true })
+
+    const dataset = await withStubs(rows, () => buildTrainingDataset({ horizon: 3 }))
+    const trained = dataset.find((row) => row.gameweek === 6)
+    const predicted = horizon.later.find((row) => row.gameweek === 6)
+
+    // The finished-fixture flag and results differ by construction; everything the model sees must match
+    for (const section of ["recent", "availability", "historical", "player", "team"]) {
+        assert.deepEqual(predicted.features[section], trained.features[section], section)
+    }
+    assert.deepEqual(predicted.features.fixtures.difficulty, trained.features.fixtures.difficulty)
+})
+
+test("later rows never use results from the gameweeks before them", async () => {
+    const rows = longRun()
+    const before = (await withStubs(rows, () => getAllPredictionFeatures({ horizon: 3 }))).players[0].horizon.later
+
+    // A (made-up) result for gameweek 4 can't change a row built from before gameweek 4
+    rows.gameweeks.push(played(4, 104, 50, false, 20))
+    const after = (await withStubs(rows, () => getAllPredictionFeatures({ horizon: 3 }))).players[0].horizon.later
+
+    assert.deepEqual(after.map((row) => row.features.recent), before.map((row) => row.features.recent))
+})
+
+test("a later row's team form is as of the first upcoming gameweek, even if a match in it has been played", async () => {
+    const rows = longRun()
+    // A double gameweek 4, half played: one match finished, one still to come
+    rows.fixtures.push(finished(108, 4, 10, 90, 5, 0))
+
+    const { horizon } = (await withStubs(rows, () => getAllPredictionFeatures({ horizon: 3 }))).players[0]
+    const matchesCounted = horizon.later[0].features.team.overall.matches
+
+    // Only gameweeks 1 to 3 count: the half-played gameweek 4 was not known to a forecast made before it
+    assert.equal(matchesCounted, 3)
+})

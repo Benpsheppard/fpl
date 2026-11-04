@@ -2,40 +2,46 @@
 //
 // Building the training dataset reads most of the database and takes a while,
 // but its inputs only change when a sync runs. Cache the result and drop it
-// whenever a sync writes data. Concurrent requests share one build.
+// whenever a sync writes data. Concurrent requests for the same dataset share
+// one build. Datasets are kept by key, because the dataset for looking one
+// gameweek ahead differs from the one for looking three ahead.
 
-let cached = null
-let building = null
+const DEFAULT_KEY = "default"
+
+const cached = new Map()
+const building = new Map()
 let generation = 0
 
-const getCachedDataset = async (build) => {
-    if (cached) {
-        return cached
+const getCachedDataset = async (build, key = DEFAULT_KEY) => {
+    if (cached.has(key)) {
+        return cached.get(key)
     }
 
-    if (!building) {
+    if (!building.has(key)) {
         const startedAt = generation
 
-        building = build()
+        const pending = build()
             .then((dataset) => {
                 // A sync landed while building: serve this result but don't keep it
                 if (startedAt === generation) {
-                    cached = dataset
+                    cached.set(key, dataset)
                 }
 
                 return dataset
             })
             .finally(() => {
-                building = null
+                building.delete(key)
             })
+
+        building.set(key, pending)
     }
 
-    return building
+    return building.get(key)
 }
 
 const invalidateDatasetCache = () => {
     generation++
-    cached = null
+    cached.clear()
 }
 
 module.exports = { getCachedDataset, invalidateDatasetCache }

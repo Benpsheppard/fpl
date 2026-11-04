@@ -29,7 +29,19 @@ const buildTrainingDataset = asyncHandler(async (req, res) => {
         }
     }
 
-    const dataset = await trainingDatasetService.getTrainingDataset({ maxGameweek })
+    // How many gameweeks ahead the rows look. 1 is the next gameweek.
+    let horizon = 1
+
+    if (req.query.horizon !== undefined) {
+        horizon = Number(req.query.horizon)
+
+        if (!Number.isInteger(horizon) || horizon < 1 || horizon > 5) {
+            res.status(400).json({ message: "horizon must be an integer from 1 to 5" })
+            return
+        }
+    }
+
+    const dataset = await trainingDatasetService.getTrainingDataset({ maxGameweek, horizon })
 
     res.status(200).json({
         rows: dataset.length,

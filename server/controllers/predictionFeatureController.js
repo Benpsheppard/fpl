@@ -22,7 +22,19 @@ const getPredictionFeatures = asyncHandler(async (req, res) => {
 })
 
 const getAllPredictionFeatures = asyncHandler(async (req, res) => {
-    res.status(200).json(await predictionFeatureService.getAllPredictionFeatures())
+    // How many gameweeks ahead to build rows for. 1 is the next gameweek only.
+    let horizon = 1
+
+    if (req.query.horizon !== undefined) {
+        horizon = Number(req.query.horizon)
+
+        if (!Number.isInteger(horizon) || horizon < 1 || horizon > 5) {
+            res.status(400).json({ message: "horizon must be an integer from 1 to 5" })
+            return
+        }
+    }
+
+    res.status(200).json(await predictionFeatureService.getAllPredictionFeatures({ horizon }))
 })
 
 module.exports = {

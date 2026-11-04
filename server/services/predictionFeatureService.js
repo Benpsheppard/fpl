@@ -204,7 +204,11 @@ const getFreshness = (dataThroughGameweek, fixtures) => {
 
 // One player's features for their next fixture, built from data the caller has already loaded.
 // Returns null when there is no history or no upcoming fixture.
-const buildPredictionPayload = ({ player, playerGameweeks, seasons, fixtures, fixtureById, freshness, now }) => {
+//
+// horizon (1 to 5) also builds a row for each later gameweek in the window that starts at the coming round.
+// A later row is what a forecast made now would see: form and team form as of the first upcoming gameweek,
+// but that later gameweek's own fixture. Training builds its horizon-h rows the same way (see trainingDatasetService).
+const buildPredictionPayload = ({ player, playerGameweeks, seasons, fixtures, fixtureById, freshness, now, horizon = 1 }) => {
     if (playerGameweeks.length === 0) {
         return null
     }
@@ -232,11 +236,46 @@ const buildPredictionPayload = ({ player, playerGameweeks, seasons, fixtures, fi
         fixtureById
     })
 
+    const asOfGameweek = nextFixture.gameweek
+    const windowStart = Math.min(getNextRound(fixtures) ?? asOfGameweek, asOfGameweek)
+    const windowEnd = Math.min(LAST_GAMEWEEK, windowStart + horizon - 1)
+
+    // The first fixture of each later gameweek in the window (a blank gameweek has none)
+    const laterFixtures = new Map()
+    for (const fixture of upcomingFixtures) {
+        if (fixture.gameweek > asOfGameweek && fixture.gameweek <= windowEnd && !laterFixtures.has(fixture.gameweek)) {
+            laterFixtures.set(fixture.gameweek, fixture)
+        }
+    }
+
+    const later = [ ...laterFixtures.values() ].map((fixture) => {
+        const laterIsHome = fixture.homeTeam === player.team
+
+        return {
+            gameweek: fixture.gameweek,
+            features: buildFeatureSet({
+                player,
+                teamId: player.team,
+                opponentTeamId: laterIsHome ? fixture.awayTeam : fixture.homeTeam,
+                isHome: laterIsHome,
+                fixture,
+                previousGameweeks: playerGameweeks.filter((gameweek) => gameweek.gameweek < asOfGameweek),
+                seasons,
+                fixtures,
+                fixtureById,
+                asOfGameweek
+            })
+        }
+    })
+
     return {
         playerId: player.fplId,
         gameweek: nextFixture.gameweek,
 
         features,
+
+        // Present only when a horizon beyond one gameweek was asked for
+        ...(horizon > 1 ? { horizon: { fromGameweek: windowStart, toGameweek: windowEnd, later } } : {}),
 
         // Live information with no training equivalent, so not model inputs
         context: {
@@ -288,7 +327,7 @@ const getPredictionFeatures = async (playerId) => {
 }
 
 // Every active player's features in one pass, loading the collections once instead of per player
-const getAllPredictionFeatures = async () => {
+const getAllPredictionFeatures = async ({ horizon = 1 } = {}) => {
     const [ players, gameweeks, seasons, fixtures ] = await Promise.all([
         Player.find({ removed: false }).lean(),
         PlayerGameweek.find().sort({ gameweek: 1 }).lean(),
@@ -323,7 +362,8 @@ const getAllPredictionFeatures = async () => {
             fixtures,
             fixtureById,
             freshness,
-            now
+            now,
+            horizon
         }))
         .filter(Boolean)
 
@@ -333,5 +373,6 @@ const getAllPredictionFeatures = async () => {
 module.exports = {
     getPredictionFeatures,
     getAllPredictionFeatures,
+    buildPredictionPayload,
     getFixtureRun
 }

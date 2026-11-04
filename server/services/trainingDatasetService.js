@@ -59,7 +59,11 @@ const buildTrainingRow = async (playerId, gameweek) => {
     }
 }
 
-const buildTrainingDataset = async () => {
+// horizon 1 is the usual dataset: each row is built from everything before its gameweek, as a
+// forecast made just before it would be. Horizon 3 builds each row as a forecast made three
+// gameweeks before the match: only gameweeks up to then count towards form, and so do the
+// fixtures finished by then, while the fixture itself (venue, opponent, difficulty) is the later one.
+const buildTrainingDataset = async ({ horizon = 1 } = {}) => {
     const [ players, gameweeks, seasons, fixtures ] = await Promise.all([
         Player.find({
             removed: false
@@ -136,6 +140,14 @@ const buildTrainingDataset = async () => {
                 continue
             }
 
+            // The gameweek the forecast is made before: everything earlier is known, nothing later is
+            const asOfGameweek = targetGameweek.gameweek - horizon + 1
+
+            // A forecast can't be made before the season started
+            if (asOfGameweek < 1) {
+                continue
+            }
+
             trainingRows.push({
                 playerId: player.fplId,
                 gameweek: targetGameweek.gameweek,
@@ -146,10 +158,13 @@ const buildTrainingDataset = async () => {
                     opponentTeamId: targetGameweek.opponentTeam,
                     isHome: targetGameweek.wasHome,
                     fixture,
-                    previousGameweeks: playerGameweeks.slice(0, index), // sorted, one row per gameweek
+                    previousGameweeks: horizon === 1
+                        ? playerGameweeks.slice(0, index) // sorted, one row per gameweek
+                        : playerGameweeks.filter((gameweek) => gameweek.gameweek < asOfGameweek),
                     seasons: historicalSeasons,
                     fixtures,
-                    fixtureById: fixtureByIdMap
+                    fixtureById: fixtureByIdMap,
+                    asOfGameweek
                 }),
 
                 target: {
@@ -172,7 +187,13 @@ const buildTrainingDataset = async () => {
     console.log("Total training rows:", trainingRows.length)
     console.log("Rows by gameweek:", rowsByGameweek)
 
-    // Validate newly created dataset
+    // Validate newly created dataset. The validator recomputes features from every earlier
+    // gameweek, which is only what a horizon-1 row is built from.
+    if (horizon !== 1) {
+        console.log(`Dataset validation skipped for horizon ${horizon}`)
+        return trainingRows
+    }
+
     const validation = await validateTrainingDataset(trainingRows, gameweeks)
     console.log("Dataset validation: ", JSON.stringify({
         ...validation,
@@ -614,8 +635,8 @@ const calculateExpectedAvailability = (window) => {
 }
 
 // Cached between syncs. maxGameweek trims the response to rows up to and including that gameweek.
-const getTrainingDataset = async ({ maxGameweek } = {}) => {
-    const dataset = await getCachedDataset(buildTrainingDataset)
+const getTrainingDataset = async ({ maxGameweek, horizon = 1 } = {}) => {
+    const dataset = await getCachedDataset(() => buildTrainingDataset({ horizon }), `horizon-${horizon}`)
 
     if (maxGameweek === undefined) {
         return dataset
